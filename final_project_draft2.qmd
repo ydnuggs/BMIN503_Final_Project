@@ -1,0 +1,335 @@
+---
+title: "Your Title"
+subtitle: "BMIN503/EPID600 Final Project"
+author: "FirstName LastName"
+format: html
+editor: visual
+number-sections: true
+embed-resources: true
+---
+
+------------------------------------------------------------------------
+
+Use this template to complete your project throughout the course. Your Final Project presentation will be based on the contents of this document. Replace the title/name above and text below with your own, but keep the headers. Feel free to change the theme and other display settings, although this is not required.
+
+## Overview {#sec-overview}
+
+Give a brief a description of your project and its goal(s), what data you are using to complete it, and what two faculty/staff in different fields you have spoken to about your project with a brief summary of what you learned from each person. Include a link to your final project GitHub repository.
+
+## Introduction {#sec-introduction}
+
+Describe the problem addressed, its significance, and some background to motivate the problem. This should extend what is in the @sec-overview.
+
+Explain why your problem is interdisciplinary, what fields can contribute to its understanding, and incorporate background related to what you learned from meeting with faculty/staff.
+
+## Methods {#sec-methods}
+
+Describe the data used and general methodological approach used to address the problem described in the @sec-introduction. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why.
+
+```{r}
+#| include: false
+# Load necessary packages
+library(tidyverse)
+library(sf)
+library(tidycensus)
+library(ggspatial)
+library(leaflet)
+library(nhanesA)
+library(gtsummary)
+library(readxl)
+
+```
+
+```{r}
+# Use a Census API Key to perform queries with tidycensus in R, to use data from the Decennial Census and the American Community Survey (ACS).
+#| eval: FALSE 
+census_api_key("8d4ae400e665d714446a25ed86d77a9125c57ec6", install = TRUE, overwrite = TRUE)
+```
+
+```{r}
+## 2020 Decennial Census Variables with Demographic and Housing Characteristics File (DHC)
+
+decennial_2020_vars_dhc <- load_variables(
+                              year = 2020, 
+                              "dhc", #decennial census Demographic and Housing Characteristics file
+                              cache = TRUE
+                             )
+
+## race
+vars_dhc_race = c(
+        #all = "P3_001N",
+        white = "P3_002N",
+        baa = "P3_003N",
+        amin = "P3_004N",
+        asian = "P3_005N",
+        nhopi = "P3_006N",
+        other = "P3_007N",
+        multi = "P3_008N"
+       )
+
+data_dhc_race = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_race,
+  summary_var = "P3_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+#create a column with frequency
+data_dhc_race <- data_dhc_race %>%
+  mutate(var_freq_race = ifelse(summary_value != 0, value / summary_value, NA))
+#remove variable list
+rm(vars_dhc_race)
+
+## ethnicity
+vars_dhc_ethnicity = c(
+        #all = "P4_001N",
+        nothisp = "P4_002N", #Not Hispanic or Latino
+        hisp = "P4_003N" #Hispanic or Latino
+       )
+
+data_dhc_ethnicity = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_ethnicity,
+  summary_var = "P4_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_ethnicity <- data_dhc_ethnicity %>%
+  mutate(var_freq_ethnicity = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_ethnicity)
+
+## urban/rural
+vars_dhc_urban_p = c(
+        #all = "P2_001N",
+        urban = "P2_002N",
+        rural = "P2_003N",
+        urbanrural_undefined = "P2_004N" #Not defined for this file
+       )
+
+data_dhc_urban_p = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_urban_p,
+  summary_var = "P2_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_urban_p <- data_dhc_urban_p %>%
+  mutate(var_freq_urban = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_urban_p)
+
+## housing units occupied
+vars_dhc_housing_occ = c(
+        #all = "H3_001N",
+        housing_occupied = "H3_002N",
+        housing_vacant = "H3_003N"
+        )
+
+data_dhc_housing_occ = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_housing_occ,
+  summary_var = "H3_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_housing_occ <- data_dhc_housing_occ %>%
+  mutate(var_freq_housing_occ = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_housing_occ)
+
+## household type
+#NOTE: A household that has at least one member of the household related to the householder by birth, marriage, or adoption is a "Family household." "Nonfamily households" consist of people living alone and households which do not have any members related to the householder.
+vars_dhc_household_type = c(
+        #all = "P16_001N",
+        married = "P16_003N", #Family households: Married couple family
+        householder_male = "P16_005N", #Family households: Male householder, no spouse present
+        householder_female = "P16_006N", #Family households: Female householder, no spouse present
+        householder_alone = "P16_008N", #Nonfamily households: Householder living alone
+        householder_not_alone = "P16_009N" #Nonfamily households: Householder not living alone
+       )
+
+data_dhc_household_type = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_household_type,
+  summary_var = "P16_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_household_type <- data_dhc_household_type %>%
+  mutate(var_freq_household_type = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_household_type)
+
+## household size
+vars_dhc_household_size = c(
+       #all = "H9_001N",
+        household_one = "H9_002N", #1-person household
+        household_two = "H9_003N", #2-person household
+        household_three = "H9_004N", #3-person household
+        household_four = "H9_005N", #4-person household
+        household_five = "H9_006N", #5-person household
+        household_six = "H9_007N", #6-person household
+        household_seven = "H9_008N" #7-person household
+        )
+
+data_dhc_household_size = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_household_size,
+  summary_var = "H9_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_household_size <- data_dhc_household_size %>%
+  mutate(var_freq_household_size = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_household_size)
+
+
+## median age
+vars_dhc_median_age = c(
+        age_median = "P13_001N"
+        )
+
+data_dhc_median_age = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_median_age,
+  year = 2020,
+  sumfile = "dhc"
+)
+rm(vars_dhc_median_age)
+
+```
+
+```{r}
+# 2016-2020 ACS 5-year Variables
+acs_2020_vars <- load_variables(
+  year = 2020, 
+  "acs5", 
+  cache = TRUE
+)
+
+## poverty level
+vars_acs_poverty_level = c(
+        #all = "B17003_001", #2020 Population 25+ for whom Poverty Status is Determined (ACS 5-Yr)
+        pov_level_below = "B17003_002", #2020 Population 25+ with Income Below Poverty Level (ACS 5-Yr) 
+        pov_level_atabove = "B17003_013" #2020 Population 25+ w/Income at/Above Poverty Level (ACS 5-Yr) 
+        )
+
+data_acs_poverty_level = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_poverty_level,
+  summary_var = "B17003_001", #creates a column w/'total' variable
+  year = 2020
+)
+data_acs_poverty_level <- data_acs_poverty_level %>%
+  mutate(var_freq_poverty_level = ifelse(summary_est != 0, estimate / summary_est, NA))
+rm(vars_acs_poverty_level)
+
+
+
+###########
+
+### EDUCATION NOT ADDING UP
+
+## educational attainment
+vars_acs_education = c(
+        all = "B17003_001", #2020 Population 25+ for whom Poverty Status is Determined (ACS 5-Yr)
+        pov_below_m_lesshighschool = "B17003_004E", #2020 Male 25+ Below Poverty: < High School Grad (ACS 5-Yr)
+        pov_below_m_highschoolgrad = "B17003_005E", #2020 Male 25+ Below Poverty: High School Grad (ACS 5-Yr)
+        pov_below_m_collegegrad = "B17003_007E", #2020 Male 25+ Below Poverty: Bachelor/Higher (ACS 5-Yr)
+        pov_below_f_lesshighschool = "B17003_009E", #2020 Female 25+ Below Poverty: < High School Grad (ACS 5-Yr)
+        pov_below_f_highschoolgrad = "B17003_010E", #2020 Female 25+ Below Poverty: High School Grad (ACS 5-Yr)
+        pov_below_f_collegegrad = "B17003_012E", #2020 Female 25+ Below Poverty: Bachelor/Higher (ACS 5-Yr)
+        pov_above_m_lesshighschool = "B17003_015E", #2020 Male 25+ Above Poverty: < High School Grad (ACS 5-Yr)
+        pov_above_m_highschoolgrad = "B17003_016E", #2020 Male 25+ Above Poverty: High School Grad (ACS 5-Yr)
+        pov_above_m_collegegrad = "B17003_018E", #2020 Male 25+ Above Poverty: Bachelor/Higher (ACS 5-Yr)
+        pov_above_f_lesshighschool = "B17003_020E", #2020 Female 25+ Above Poverty: < High School Grad (ACS 5-Yr)
+        pov_above_f_highschoolgrad = "B17003_021E", #2020 Female 25+ Above Poverty: High School Grad (ACS 5-Yr)
+        pov_above_f_collegegrad = "B17003_023E" #2020 Female 25+ Above Poverty: Bachelor/Higher (ACS 5-Yr)
+        )
+
+data_acs_education = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_education,
+  summary_var = "B17003_001", #creates a column w/'total' variable
+  year = 2020
+)
+
+# Summarize the data - NOT WORKING PROPERLY
+data_acs_education_combined <- data_acs_education %>%
+  group_by(GEOID) %>%  # Group by census tract
+  summarise(
+    total = sum(estimate[variable == "B17003_001"], na.rm = TRUE),
+    lesshighschool = sum(estimate[variable %in% c("B17003_004E", "B17003_009E", "B17003_015E", "B17003_020E")], na.rm = TRUE),
+    highschoolgrad = sum(estimate[variable %in% c("B17003_005E", "B17003_010E", "B17003_016E", "B17003_021E")], na.rm = TRUE),
+    collegegrad = sum(estimate[variable %in% c("B17003_007E", "B17003_012E", "B17003_018E", "B17003_023E")], na.rm = TRUE)
+  )
+
+data_acs_education <- data_acs_education %>%
+  mutate(var_freq_poverty_level = ifelse(summary_est != 0, estimate / summary_est, NA))
+rm(vars_acs_education)
+
+
+
+
+###########
+
+
+# Income Data by County for PA
+pa_county_income = get_acs(
+                      geography = "county",
+                      state = "PA",
+                      table = "B19001",
+                      year = 2020)## Note that leaving the 'year' argument blank tells the API to return the most recent year available. As of writing this, that is 2020 for both the ACS and Decennial Census.
+
+```
+
+```{r}
+# Read in PLACES data with health outcomes data
+data_places = read_csv("PLACES__Local_Data_for_Better_Health__Census_Tract_Data_2024_release_20241027.csv")
+
+# Filter to include only Pennsylvania, and only the obesity data
+data_places=data_places |> filter(StateAbbr=="PA") |> filter(Measure=="Obesity among adults")
+
+# rename variable "LocationName" to "GEOID" to be consistent with census data
+data_places <- data_places %>% 
+    rename("GEOID" = "LocationName")
+
+
+####################
+
+
+### WHY DOES THIS NOT WORK?
+
+# Define the URL of the Excel file
+url_places <- "https://data.cdc.gov/download/PLACES-Local-Data-for-Better-Health-Census-Tract-D/excel/PLACES-Local-Data-for-Better-Health-Census-Tract-D.xlsx"
+#url_places <- "https://data.cdc.gov/500-Cities-Places/PLACES-Local-Data-for-Better-Health-Census-Tract-D/cwsq-ngmh/about_data"
+
+# Define a temporary file path
+temp_file <- tempfile(fileext = ".xlsx")
+
+# Download the Excel file
+download.file(url_places, temp_file, mode = "wb")
+
+# Read the Excel file
+data_places <- read_excel(temp_file)
+
+# View the first few rows of the data
+print(head(data_places))
+
+
+
+```
+
+## Results {#sec-results}
+
+Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
+
+## Conclusion
+
+This the conclusion. The @sec-results can be invoked here.
