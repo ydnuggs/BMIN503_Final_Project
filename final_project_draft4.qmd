@@ -1,0 +1,805 @@
+---
+title: "Your Title"
+subtitle: "BMIN503/EPID600 Final Project"
+author: "FirstName LastName"
+format: html
+editor: visual
+number-sections: true
+embed-resources: true
+---
+
+------------------------------------------------------------------------
+
+Use this template to complete your project throughout the course. Your Final Project presentation will be based on the contents of this document. Replace the title/name above and text below with your own, but keep the headers. Feel free to change the theme and other display settings, although this is not required.
+
+## Overview {#sec-overview}
+
+Social determinants of health have a notable impact on health outcomes. The Area Deprivation Index (ADI) is a composite measure of “deprivation,” based on census block data from 1969 through 1998, that can be used in health outcomes research. In this project, we update the ADI using more recent census data.
+
+I met with Drs. Amanda Muir and Lindsey Albenberg to gain insight on which census variables may be helpful to include in initial analyses, and to discuss analytic approaches. This project can be found at *link to GitHub repository*.
+
+## Introduction {#sec-introduction}
+
+In 2003 -----, Gopal Singh published the Area Deprivation Index (ADI), a “composite area-based deprivation index for the United States” based on census data from 1969 and 1998. It has become a tool used to examine, on an area-based scale, how social determinants of health can have an impact on outcomes such as mortality. The Area Deprivation Index uses factor score coefficients based on census data. However, neighborhoods and their sociodemographic can change over time; therefore, it is important to re-examine these calculations intermittently. In this project, we use recent data from the 2020 U.S. decennial census and the 2016-2020 5-year American Community Survey (ACS) to reconstruct the ADI and re-calculate the factor score coefficients. We then test whether the ADI is associated with several health outcomes, using tract level data.
+
+The ADI is useful for health disparities research, which is an important area in all fields of research. There are several other indices that measure socioeconomic status (SES) in some way; these include the Townsend Deprivation Index, Social Disadvantage Index, and others. The ADI is one of the oldest validated indices for SES, and so we use it in this paper. Future research can include doing similar analyses for other commonly used SES indices.
+
+----- insert citations
+
+## Methods {#sec-methods}
+
+Describe the data used and general methodological approach used to address the problem described in the @sec-introduction. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why.
+
+```{r}
+# Load necessary packages
+library(tidyverse)
+library(sf)
+library(tidycensus)
+library(ggspatial)
+library(leaflet)
+library(nhanesA)
+library(gtsummary)
+library(readxl)
+```
+
+```{r}
+# Use a Census API Key to perform queries with tidycensus in R, to use data from the Decennial Census and the American Community Survey (ACS).
+#| eval: FALSE 
+census_api_key("8d4ae400e665d714446a25ed86d77a9125c57ec6", install = TRUE, overwrite = TRUE)
+```
+
+``` t
+We create a dataset with the 2020 Decennial Census variables with Demographic and Housing Characteristics (DHC). We do the same for the 2016-2020 ACS 5-year Variables. These datasets can be used to identify the variables of interest based on their decriptions in the files.
+```
+
+```{r}
+# 2020 Decennial Census variables with Demographic and Housing Characteristics
+decennial_2020_vars_dhc <- load_variables(
+                              year = 2020, 
+                              "dhc", #decennial census Demographic and Housing Characteristics file
+                              cache = TRUE
+                             )
+
+# 2016-2020 ACS 5-year Variables
+acs_2020_vars <- load_variables(
+  year = 2020, 
+  "acs5", 
+  cache = TRUE
+)
+```
+
+``` t
+We then create datasets with each variable/s of interest. The survey datasets contain data counts and the total count surveyed, per geographic area. Therefore, we also calculate a frequency, which is the count divided by the total count, for each variable. Some variables contain sub-categories that are not of particular interest to us, so in those cases we combine multiple sub-categories to obtain the broader categories in which we are interested.
+```
+
+```{r}
+## educational attainment
+vars_acs_education = c(
+        #all = "B17003_001", #2020 Population 25+ for whom Poverty Status is Determined (ACS 5-Yr)
+        pov_below_m_lesshighschool = "B17003_004", #2020 Male 25+ Below Poverty: < High School Grad (ACS 5-Yr)
+        pov_below_m_highschoolgrad = "B17003_005", #2020 Male 25+ Below Poverty: High School Grad (ACS 5-Yr)
+        pov_below_m_associates = "B17003_006", #2020 Male 25+ Below Poverty: Some college, associate's degree (ACS 5-Yr)
+        pov_below_m_collegegrad = "B17003_007", #2020 Male 25+ Below Poverty: Bachelor/Higher (ACS 5-Yr)
+        pov_below_f_lesshighschool = "B17003_009", #2020 Female 25+ Below Poverty: < High School Grad (ACS 5-Yr)
+        pov_below_f_highschoolgrad = "B17003_010", #2020 Female 25+ Below Poverty: High School Grad (ACS 5-Yr)
+        pov_below_f_associates = "B17003_011", #2020 Female 25+ Below Poverty: Some college, associate's degree (ACS 5-Yr)
+        pov_below_f_collegegrad = "B17003_012", #2020 Female 25+ Below Poverty: Bachelor/Higher (ACS 5-Yr)
+        pov_above_m_lesshighschool = "B17003_015", #2020 Male 25+ Above Poverty: < High School Grad (ACS 5-Yr)
+        pov_above_m_highschoolgrad = "B17003_016", #2020 Male 25+ Above Poverty: High School Grad (ACS 5-Yr)
+        pov_above_m_associates = "B17003_017", #2020 Male 25+ Above Poverty: Some college, associate's degree (ACS 5-Yr)
+        pov_above_m_collegegrad = "B17003_018", #2020 Male 25+ Above Poverty: Bachelor/Higher (ACS 5-Yr)
+        pov_above_f_lesshighschool = "B17003_020", #2020 Female 25+ Above Poverty: < High School Grad (ACS 5-Yr)
+        pov_above_f_highschoolgrad = "B17003_021", #2020 Female 25+ Above Poverty: High School Grad (ACS 5-Yr)
+        pov_above_f_associates = "B17003_022", #2020 Female 25+ Above Poverty: Some college, associate's degree (ACS 5-Yr)
+        pov_above_f_collegegrad = "B17003_023" #2020 Female 25+ Above Poverty: Bachelor/Higher (ACS 5-Yr)
+        )
+
+data_acs_education = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_education,
+  summary_var = "B17003_001", #creates a column w/'total' variable
+  year = 2020
+)
+
+# Summarize the data
+data_acs_education <- data_acs_education %>%
+  mutate(category = case_when(
+    variable %in% c("pov_below_m_lesshighschool", "pov_below_f_lesshighschool", "pov_above_m_lesshighschool", "pov_above_f_lesshighschool") ~ "lesshighschool",
+    variable %in% c("pov_below_m_highschoolgrad", "pov_below_f_highschoolgrad", "pov_above_m_highschoolgrad", "pov_above_f_highschoolgrad") ~ "highschoolgrad",
+    variable %in% c("pov_below_m_associates", "pov_below_f_associates", "pov_above_m_associates", "pov_above_f_associates") ~ "associates",
+    variable %in% c("pov_below_m_collegegrad", "pov_below_f_collegegrad", "pov_above_m_collegegrad", "pov_above_f_collegegrad") ~ "collegegrad",
+    TRUE ~ NA_character_  # Handle cases that do not fall into these categories
+  ))
+
+data_acs_education <- data_acs_education %>%
+  group_by(GEOID, category) %>%
+  summarise(
+    estimate = sum(estimate, na.rm = TRUE),
+    summary_est = first(summary_est),  # Assuming summary_est is the same for each group
+    var_freq_education = estimate / summary_est,
+    .groups = 'drop'
+  )
+rm(vars_acs_education)
+
+
+## Population aged ≥ 25 y who did nto graduate high school
+# The earlier studies did <9 years of education
+data_acs_less_highschool <- data_acs_education %>% filter(category == "data_acs_less_highschool")
+data3 <- data_acs_less_highschool %>%
+  rename(new_var5 = var5)
+# WORK ON THIS
+
+## Population aged ≥ 25 y with at least an associates degree
+# The earlier studies used at least a high school diploma
+data_acs_associates_college <- data_acs_education %>%
+  filter(category %in% c("associates", "collegegrad")) |>
+  group_by(GEOID) |>
+  summarise(var_freq_associates_college = sum(var_freq_education, na.rm = TRUE))
+
+
+## White collar jobs: Employed persons aged ≥ 16 y in white-collar occupations, defined by "management, business, science, and arts occupations" and "sales and office occupations"
+vars_acs_whitecollar = c(
+        #all = "C24010_001", #total included in sex by occupation for the civilian employed population 16+ years of age
+        management_m = "C24010_003", #Male: Management, business, science, and arts occupations
+        sales_m = "C24010_027", #Male: Sales and office occupations
+        management_f = "C24010_039", #Female: Management, business, science, and arts occupations
+        sales_f = "C24010_063" #Female: Sales and office occupations
+        )
+
+data_acs_whitecollar = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_whitecollar,
+  summary_var = "C24010_001", #creates a column w/'total' variable
+  year = 2020
+)
+
+data_acs_whitecollar <- data_acs_whitecollar %>%
+  group_by(GEOID) %>%
+  summarise(
+    estimate = sum(estimate, na.rm = TRUE),
+    summary_est = first(summary_est),  # Assuming summary_est is the same for each group
+    var_freq_whitecollar = estimate / summary_est,
+    .groups = 'drop'
+  )
+rm(vars_acs_whitecollar)
+
+
+## median income
+vars_acs_median_income = c(
+        income_median = "B19326_001"
+        )
+
+data_acs_median_income = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_median_income,
+  year = 2020
+)
+data_acs_median_income <- data_acs_median_income |>
+  rename(var_median_income = estimate)
+rm(vars_acs_median_income)
+
+
+## Income disparity
+# Income disparity in 1990 was defined as the log of 100 × ratio of number of households with < $10 000 income to number of households with ≥$50 000 income.
+# Instead we will use the Gini coefficient.
+vars_acs_gini = c(
+        gini = "B19083_001" #Gini Index of income inequality (higher indicates more inequality)
+        )
+
+data_acs_gini = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_gini,
+  year = 2020
+)
+data_acs_gini <- data_acs_gini |>
+  rename(var_gini = estimate)
+rm(vars_acs_gini)
+
+
+## Median home value
+vars_acs_home_value = c(
+        home_value = "B25097_001" #median home value
+        )
+
+data_acs_home_value = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_home_value,
+  year = 2020
+)
+data_acs_home_value <- data_acs_home_value |>
+  rename(var_home_value = estimate)
+rm(vars_acs_home_value)
+
+
+## Median gross rent
+vars_acs_median_rent = c(
+        median_rent = "B25064_001" #median gross rent (dollars)
+        )
+
+data_acs_median_rent = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_median_rent,
+  year = 2020
+)
+data_acs_median_rent <- data_acs_median_rent |>
+  rename(var_median_rent = estimate)
+rm(vars_acs_median_rent)
+
+
+## Median monthly mortgage
+# The monthly mortgage alone is not available. Instead we will use the "selected monthly owner costs." We will include units with and without mortgages (although there is data avilable if we wanted to separate by mortgage status).
+vars_acs_housing_costs = c(
+        housing_costs = "B25087_001" #selected monthly owner costs
+        )
+
+data_acs_housing_costs = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_housing_costs,
+  year = 2020
+)
+data_acs_housing_costs <- data_acs_housing_costs |>
+  rename(var_housing_costs = estimate)
+rm(vars_acs_housing_costs)
+
+
+## owner-occupied housing units (home ownership rate)
+vars_dhc_homeownership = c(
+        #all = "H13_001N",
+        owner_occupied = "H13_002N"
+        )
+
+data_dhc_homeownership = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_homeownership,
+  summary_var = "H13_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_homeownership <- data_dhc_homeownership %>%
+  mutate(var_freq_homeownership = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_homeownership)
+
+
+## Unemployment rate
+vars_acs_unemployment = c(
+        #all = "C18120_002", #in the labor force
+        unemployment = "C18120_006" #unemployed in the labor force
+        )
+
+data_acs_unemployment = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_unemployment,
+  summary_var = "C18120_002", #creates a column w/'total' variable
+  year = 2020
+)
+data_acs_unemployment <- data_acs_unemployment %>%
+  mutate(var_freq_unemployment = ifelse(summary_est != 0, estimate / summary_est, NA))
+rm(vars_acs_unemployment)
+
+
+## below poverty level
+vars_acs_poverty_level = c(
+        #all = "B06012_001",
+        pov_level_below100 = "B06012_002", #Below 100 percent of the poverty level
+        pov_level_100to149 = "B06012_003" #100 to 149 percent of the poverty level
+        )
+
+data_acs_poverty_level = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_poverty_level,
+  summary_var = "B06012_001", #creates a column w/'total' variable
+  year = 2020
+)
+data_acs_poverty_level <- data_acs_poverty_level %>%
+  mutate(var_freq_poverty_level = ifelse(summary_est != 0, estimate / summary_est, NA))
+rm(vars_acs_poverty_level)
+
+
+## Population below 150% of the poverty threshold
+# Combine the categories of below 100% of the poverty threshold + 100-149% of the poverty threshold, in order to obtain a composite number of the population below 150% of the poverty threshold
+data_acs_poverty_level_150 <- data_acs_poverty_level %>%
+  mutate(category = case_when(
+    variable %in% c("pov_level_below100", "pov_level_100to149") ~ "pov_level_below150",
+    TRUE ~ NA_character_  # Handle cases that do not fall into these categories
+  ))
+
+data_acs_poverty_level_150 <- data_acs_poverty_level_150 %>%
+  group_by(GEOID, category) %>%
+  summarise(
+    estimate = sum(estimate, na.rm = TRUE),
+    summary_est = first(summary_est),  # Assuming summary_est is the same for each group
+    var_freq_poverty_level_150 = estimate / summary_est,
+    .groups = 'drop'
+  )
+
+
+## Single-parent households with children aged < 18 y
+vars_dhc_singleparent = c(
+       #all = "P20_001N",
+        singleparent_m = "P20_011N", #Male householder, no spouse or partner present, with own children under 18
+        singleparent_f = "P20_017N" #Female householder, no spouse or partner present, with own children under 18
+        )
+
+data_dhc_singleparent = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_singleparent,
+  summary_var = "P20_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+
+# Summarize the data
+data_dhc_singleparent <- data_dhc_singleparent %>%
+  mutate(category = case_when(
+    variable %in% c("singleparent_m", "singleparent_f") ~ "singleparent",
+    TRUE ~ NA_character_  # Handle cases that do not fall into these categories
+  ))
+
+data_dhc_singleparent <- data_dhc_singleparent %>%
+  group_by(GEOID, category) %>%
+  summarise(
+    value = sum(value, na.rm = TRUE),
+    summary_value = first(summary_value),  # Assuming summary_est is the same for each group
+    var_freq_singleparent = value / summary_value,
+    .groups = 'drop'
+  )
+rm(vars_dhc_singleparent)
+
+
+## no motor vehicle
+vars_acs_novehicle = c(
+        #all = "B08014_001", #2020 Workers Age 16+ in Households (ACS 5-Yr
+        novehicle = "B08014_002" #No vehicle available
+        )
+
+data_acs_novehicle = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_novehicle,
+  summary_var = "B08014_001", #creates a column w/'total' variable
+  year = 2020
+)
+data_acs_novehicle <- data_acs_novehicle %>%
+  mutate(var_freq_novehicle = ifelse(summary_est != 0, estimate / summary_est, NA))
+rm(vars_acs_novehicle)
+
+
+## Households without a telephone
+#Are these correct? Seems like a high percentage...
+vars_acs_no_telephone = c(
+        #all = "B25043_001",
+        no_telephone_owner = "B25043_007", #Owner occupied, no telephone service available
+        no_telephone_renter = "B25043_016" #Renter occupied, no telephone service available
+        )
+
+data_acs_no_telephone = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_no_telephone,
+  summary_var = "B25043_001", #creates a column w/'total' variable
+  year = 2020
+)
+
+# Summarize the data
+data_acs_no_telephone <- data_acs_no_telephone %>%
+  mutate(category = case_when(
+    variable %in% c("no_telephone_owner", "no_telephone_renter") ~ "no_telephone",
+    TRUE ~ NA_character_  # Handle cases that do not fall into these categories
+  ))
+
+data_acs_no_telephone <- data_acs_no_telephone %>%
+  group_by(GEOID, category) %>%
+  summarise(
+    estimate = sum(estimate, na.rm = TRUE),
+    summary_est = first(summary_est),  # Assuming summary_est is the same for each group
+    var_freq_no_telephone = estimate / summary_est,
+    .groups = 'drop'
+  )
+rm(vars_acs_no_telephone)
+
+
+## Occupied housing units without complete plumbing, % (log)
+# NEED TO CHANGE TO LOG?
+vars_acs_incomplete_plumbing = c(
+        #all = "B25048_001", #plumbing facilities for occupied housing units
+        incomplete_plumbing = "B25048_003" #Lacking complete plumbing facilities, for occupied housing units
+        )
+
+data_acs_incomplete_plumbing = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_incomplete_plumbing,
+  summary_var = "B25048_001", #creates a column w/'total' variable
+  year = 2020
+)
+data_acs_incomplete_plumbing <- data_acs_incomplete_plumbing %>%
+  mutate(var_freq_incomplete_plumbing = ifelse(summary_est != 0, estimate / summary_est, NA))
+rm(vars_acs_incomplete_plumbing)
+
+
+## Households with more than 1 person per room, % (crowding)
+vars_acs_overcrowding = c(
+        #all = "B25014_001",
+        occupance_1.01to1.50_owner = "B25014_005", #Owner occupied, 1.01 to 1.50 occupants per room
+        occupance_1.51to2.00_owner = "B25014_006", #Owner occupied, 1.51 to 2.00 occupants per room
+        occupance_2.01andup_owner = "B25014_007", #Owner occupied, 2.01 or more occupants per room
+        occupance_1.01to1.50_renter = "B25014_011", #Renter occupied, 1.01 to 1.50 occupants per room
+        occupance_1.51to2.00_renter = "B25014_012", #Renter occupied, 1.51 to 2.00 occupants per room
+        occupance_2.01andup_renter = "B25014_013" #Renter occupied, 2.01 or more occupants per room
+        )
+
+data_acs_overcrowding = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_overcrowding,
+  summary_var = "B25014_001", #creates a column w/'total' variable
+  year = 2020
+)
+
+# Summarize the data
+data_acs_overcrowding <- data_acs_overcrowding %>%
+  mutate(category = case_when(
+    variable %in% c("occupance_1.01to1.50_owner", "occupance_1.51to2.00_owner", "occupance_2.01andup_owner", "occupance_1.01to1.50_renter", "occupance_1.51to2.00_renter","occupance_2.01andup_renter") ~ "overcrowding",
+    TRUE ~ NA_character_  # Handle cases that do not fall into these categories
+  ))
+
+data_acs_overcrowding <- data_acs_overcrowding %>%
+  group_by(GEOID, category) %>%
+  summarise(
+    estimate = sum(estimate, na.rm = TRUE),
+    summary_est = first(summary_est),  # Assuming summary_est is the same for each group
+    var_freq_overcrowding = estimate / summary_est,
+    .groups = 'drop'
+  )
+rm(vars_acs_overcrowding)
+```
+
+```{r}
+# Other variables that may be of interest to study and potentially incorporate
+
+## race
+vars_dhc_race = c(
+        #all = "P3_001N",
+        white = "P3_002N",
+        baa = "P3_003N",
+        amin = "P3_004N",
+        asian = "P3_005N",
+        nhopi = "P3_006N",
+        other = "P3_007N",
+        multi = "P3_008N"
+       )
+
+data_dhc_race = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_race,
+  summary_var = "P3_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+#create a column with frequency
+data_dhc_race <- data_dhc_race %>%
+  mutate(var_freq_race = ifelse(summary_value != 0, value / summary_value, NA))
+#remove variable list
+rm(vars_dhc_race)
+
+## ethnicity
+vars_dhc_ethnicity = c(
+        #all = "P4_001N",
+        nothisp = "P4_002N", #Not Hispanic or Latino
+        hisp = "P4_003N" #Hispanic or Latino
+       )
+
+data_dhc_ethnicity = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_ethnicity,
+  summary_var = "P4_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_ethnicity <- data_dhc_ethnicity %>%
+  mutate(var_freq_ethnicity = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_ethnicity)
+
+## urban/rural
+vars_dhc_urban_p = c(
+        #all = "P2_001N",
+        urban = "P2_002N",
+        rural = "P2_003N",
+        urbanrural_undefined = "P2_004N" #Not defined for this file
+       )
+
+data_dhc_urban_p = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_urban_p,
+  summary_var = "P2_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_urban_p <- data_dhc_urban_p %>%
+  mutate(var_freq_urban = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_urban_p)
+
+## housing units occupied
+vars_dhc_housing_occ = c(
+        #all = "H3_001N",
+        housing_occupied = "H3_002N",
+        housing_vacant = "H3_003N"
+        )
+
+data_dhc_housing_occ = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_housing_occ,
+  summary_var = "H3_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_housing_occ <- data_dhc_housing_occ %>%
+  mutate(var_freq_housing_occ = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_housing_occ)
+
+## household type
+#NOTE: A household that has at least one member of the household related to the householder by birth, marriage, or adoption is a "Family household." "Nonfamily households" consist of people living alone and households which do not have any members related to the householder.
+vars_dhc_household_type = c(
+        #all = "P16_001N",
+        married = "P16_003N", #Family households: Married couple family
+        householder_male = "P16_005N", #Family households: Male householder, no spouse present
+        householder_female = "P16_006N", #Family households: Female householder, no spouse present
+        householder_alone = "P16_008N", #Nonfamily households: Householder living alone
+        householder_not_alone = "P16_009N" #Nonfamily households: Householder not living alone
+       )
+
+data_dhc_household_type = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_household_type,
+  summary_var = "P16_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_household_type <- data_dhc_household_type %>%
+  mutate(var_freq_household_type = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_household_type)
+
+## household size
+vars_dhc_household_size = c(
+       #all = "H9_001N",
+        household_one = "H9_002N", #1-person household
+        household_two = "H9_003N", #2-person household
+        household_three = "H9_004N", #3-person household
+        household_four = "H9_005N", #4-person household
+        household_five = "H9_006N", #5-person household
+        household_six = "H9_007N", #6-person household
+        household_seven = "H9_008N" #7-person household
+        )
+
+data_dhc_household_size = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_household_size,
+  summary_var = "H9_001N", #creates a column w/'total' variable
+  year = 2020,
+  sumfile = "dhc"
+)
+data_dhc_household_size <- data_dhc_household_size %>%
+  mutate(var_freq_household_size = ifelse(summary_value != 0, value / summary_value, NA))
+rm(vars_dhc_household_size)
+
+
+## median age
+vars_dhc_median_age = c(
+        age_median = "P13_001N"
+        )
+
+data_dhc_median_age = get_decennial(
+  geography = "tract",
+  state = "PA",
+  variables = vars_dhc_median_age,
+  year = 2020,
+  sumfile = "dhc"
+)
+rm(vars_dhc_median_age)
+
+
+## income
+vars_acs_income = c(
+        #all = "B19001_001", #HOUSEHOLD INCOME IN THE PAST 12 MONTHS (IN 2020 INFLATION-ADJUSTED DOLLARS)
+        income_under10k = "B19001_002", #Less than $10,000
+        income_10_add5 = "B19001_003", #$10,000 to $14,999
+        income_15_add5 = "B19001_004", #$15,000 to $19,999
+        income_20_add5 = "B19001_005", #$20,000 to $24,999
+        income_25_add5 = "B19001_006", #$25,000 to $29,999
+        income_30_add5 = "B19001_007", #$30,000 to $34,999
+        income_35_add5 = "B19001_008", #$35,000 to $39,999
+        income_40_add5 = "B19001_009", #$40,000 to $44,999
+        income_45_add5 = "B19001_010", #$45,000 to $49,999
+        income_50_add10 = "B19001_011", #$50,000 to $59,999
+        income_60_add15 = "B19001_012", #$60,000 to $74,999
+        income_75_add25 = "B19001_013", #$75,000 to $99,999
+        income_100_add25 = "B19001_014", #$100,000 to $124,999
+        income_125_add25 = "B19001_015", #$125,000 to $149,999
+        income_150_add50 = "B19001_016", #$150,000 to $199,999
+        income_above200 = "B19001_017" #$200,000 or more
+        )
+
+data_acs_income = get_acs(
+  geography = "tract",
+  state = "PA",
+  variables = vars_acs_income,
+  summary_var = "B19001_001", #creates a column w/'total' variable
+  year = 2020
+)
+
+# Summarize the data
+data_acs_income <- data_acs_income %>%
+  mutate(category = case_when(
+    variable %in% "income_under10k" ~ "income_under10k",
+    variable %in% c("income_50_add10", "income_60_add15", "income_75_add25", "income_100_add25" , "income_125_add25", "income_150_add50", "income_above200") ~ "income50kandup",
+    TRUE ~ NA_character_  # Handle cases that do not fall into these categories
+  ))
+
+data_acs_income_combined <- data_acs_income %>%
+  group_by(GEOID, category) %>%
+  summarise(
+    estimate = sum(estimate, na.rm = TRUE),
+    summary_est = first(summary_est),  # Assuming summary_est is the same for each group
+    var_freq_income = estimate / summary_est,
+    .groups = 'drop'
+  )
+rm(vars_acs_income)
+
+```
+
+``` t
+Extract the variable frequencies, and merge datasets.
+```
+
+```{r}
+## Combine variables
+
+datasets <- list(data_acs_education, data_acs_incomplete_plumbing, data_acs_no_telephone, data_acs_novehicle, data_acs_overcrowding, data_acs_poverty_level, data_acs_poverty_level_150, data_acs_unemployment, data_acs_whitecollar, data_dhc_homeownership, data_dhc_singleparent, data_acs_median_income, data_acs_median_rent, data_acs_gini, data_acs_home_value, data_acs_housing_costs)
+
+selected_datasets <- lapply(datasets, function(df) {
+  df %>%
+    select(GEOID, starts_with("var_"))
+})
+
+# Merge all datasets by GEOID
+merged_data <- selected_datasets[[1]]  # Start with the first dataset
+
+for (i in 2:length(selected_datasets)) {
+  merged_data <- full_join(merged_data, selected_datasets[[i]], by = "GEOID")
+}
+
+```
+
+```{r}
+## TO WORK ON
+## REDO FREQUENCIES OF EDUCATION (and any other variables that have multiple components)
+```
+
+```{r}
+# Read in PLACES data with health outcomes data
+data_places = read_csv("PLACES__Local_Data_for_Better_Health__Census_Tract_Data_2024_release_20241027.csv")
+
+# Filter to include only Pennsylvania, and only the obesity data
+data_places=data_places |> filter(StateAbbr=="PA") |> filter(Measure=="Obesity among adults")
+
+# rename variable "LocationName" to "GEOID" to be consistent with census data
+data_places <- data_places %>% 
+    rename("GEOID" = "LocationName")
+
+
+####################
+
+
+### WHY DOES THIS NOT WORK?
+
+# Define the URL of the Excel file
+url_places <- "https://data.cdc.gov/download/PLACES-Local-Data-for-Better-Health-Census-Tract-D/excel/PLACES-Local-Data-for-Better-Health-Census-Tract-D.xlsx"
+#url_places <- "https://data.cdc.gov/500-Cities-Places/PLACES-Local-Data-for-Better-Health-Census-Tract-D/cwsq-ngmh/about_data"
+
+# Define a temporary file path
+temp_file <- tempfile(fileext = ".xlsx")
+
+# Download the Excel file
+download.file(url_places, temp_file, mode = "wb")
+
+# Read the Excel file
+data_places <- read_excel(temp_file)
+
+# View the first few rows of the data
+print(head(data_places))
+
+
+```
+
+## Results {#sec-results}
+
+Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
+
+```{r}
+# What is our n?
+
+data_places %>%
+  inner_join(data_dhc_median_age, by = "GEOID") %>%
+  distinct(GEOID) |> nrow()
+```
+
+```{r}
+# Count the missing data
+
+sum(is.na(data_acs_education_combined$var_freq_education))
+sum(is.na(data_acs_income_combined$var_freq_income))
+sum(is.na(data_acs_poverty_level$var_freq_poverty_level))
+sum(is.na(data_dhc_ethnicity$var_freq_ethnicity))
+sum(is.na(data_dhc_household_size$var_freq_household_size))
+sum(is.na(data_dhc_household_type$var_freq_household_type))
+sum(is.na(data_dhc_housing_occ$var_freq_housing_occ))
+sum(is.na(data_dhc_race$var_freq_race))
+sum(is.na(data_dhc_urban_p$value))
+sum(is.na(data_dhc_median_age$value))
+sum(is.na(data_places$Data_Value))
+
+data_dhc_median_age$GEOID[is.na(data_dhc_median_age$value)==T] # the tracts with missing median age
+```
+
+```{r}
+# Summary information for the variables of interest
+data_acs_education_combined |> select(category) |> tbl_summary()
+data_acs_income_combined |> select(category) |> tbl_summary()
+data_acs_poverty_level |> select(variable) |> tbl_summary()
+data_dhc_ethnicity |> select(variable) |> tbl_summary()
+data_dhc_household_size |> select(variable) |> tbl_summary()
+data_dhc_household_type |> select(variable) |> tbl_summary()
+data_dhc_housing_occ |> select(variable) |> tbl_summary()
+data_dhc_race |> select(variable) |> tbl_summary()
+
+# Median age
+ggplot(data = data_dhc_median_age, aes(value)) + 
+    geom_histogram(aes(y = after_stat(density)), breaks = seq(0, 80, 1), 
+                   color = "blue", fill = "blue", alpha = 0.7) +
+    geom_density(color = "red")
+# fairly normal distribution, so it is okay to use mean rather than median
+median(data_dhc_median_age$value, na.rm = T)
+
+# Percent urban vs rural
+mean(data_dhc_urban_p$var_freq_urban, na.rm = T)
+```
+
+```{r}
+# Graph the data basics
+
+avg_freq_acs_education_combined <- data_acs_education_combined |>
+  group_by(category) |>
+  summarize(avg_frequency = mean(var_freq_education, na.rm = TRUE))
+
+print(avg_freq_acs_education_combined)
+
+ggplot(avg_freq_acs_education_combined, aes(x = category, y = avg_frequency)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Average Frequencies by Category",
+       x = "Category",
+       y = "Average Frequency") +
+  theme_minimal()
+
+
+```
+
+## Conclusion
+
+This the conclusion. The @sec-results can be invoked here.
