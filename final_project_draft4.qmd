@@ -122,6 +122,7 @@ data_acs_education <- data_acs_education %>%
   )
 rm(vars_acs_education)
 
+#
 
 ## Population aged ≥ 25 y who did nto graduate high school
 # The earlier studies did <9 years of education
