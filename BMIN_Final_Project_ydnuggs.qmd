@@ -40,6 +40,8 @@ library(leaflet)
 library(nhanesA)
 library(gtsummary)
 library(readxl)
+library(ggbiplot)
+library(psych)
 ```
 
 ```{r}
@@ -69,7 +71,7 @@ acs_2020_vars <- load_variables(
 ```
 
 ``` t
-We then create datasets with each variable/s of interest. The survey datasets contain data counts and the total count surveyed, per geographic area. Therefore, we also calculate a frequency, which is the count divided by the total count, for each variable. Some variables contain sub-categories that are not of particular interest to us, so in those cases we combine multiple sub-categories to obtain the broader categories in which we are interested.
+We then create datasets with each variable/s of interest. The survey datasets contain data counts and the total count surveyed, per geographic area. Therefore, we also calculate a frequency, which is the count divided by the total count, for each variable. Some variables contain sub-categories that are not of particular interest to us, so in those cases we combine multiple sub-categories to obtain the broader categories in which we are interested (for example, we combine the frequency of male single parents and of female single parents within the population, to obtain a total frequency of single parents).
 ```
 
 ```{r}
@@ -122,14 +124,13 @@ data_acs_education <- data_acs_education %>%
   )
 rm(vars_acs_education)
 
-#
 
 ## Population aged ≥ 25 y who did nto graduate high school
 # The earlier studies did <9 years of education
-data_acs_less_highschool <- data_acs_education %>% filter(category == "data_acs_less_highschool")
-data3 <- data_acs_less_highschool %>%
-  rename(new_var5 = var5)
-# WORK ON THIS
+data_acs_less_highschool <- data_acs_education |> filter(category == "lesshighschool")
+data_acs_less_highschool <- data_acs_less_highschool %>%
+  rename(var_freq_lesshighschool = var_freq_education)
+
 
 ## Population aged ≥ 25 y with at least an associates degree
 # The earlier studies used at least a high school diploma
@@ -138,6 +139,7 @@ data_acs_associates_college <- data_acs_education %>%
   group_by(GEOID) |>
   summarise(var_freq_associates_college = sum(var_freq_education, na.rm = TRUE))
 
+rm(data_acs_education)
 
 ## White collar jobs: Employed persons aged ≥ 16 y in white-collar occupations, defined by "management, business, science, and arts occupations" and "sales and office occupations"
 vars_acs_whitecollar = c(
@@ -288,27 +290,33 @@ rm(vars_acs_unemployment)
 
 
 ## below poverty level
-vars_acs_poverty_level = c(
+vars_acs_poverty = c(
         #all = "B06012_001",
         pov_level_below100 = "B06012_002", #Below 100 percent of the poverty level
         pov_level_100to149 = "B06012_003" #100 to 149 percent of the poverty level
         )
 
-data_acs_poverty_level = get_acs(
+data_acs_poverty = get_acs(
   geography = "tract",
   state = "PA",
-  variables = vars_acs_poverty_level,
+  variables = vars_acs_poverty,
   summary_var = "B06012_001", #creates a column w/'total' variable
   year = 2020
 )
+data_acs_poverty <- data_acs_poverty %>%
+  mutate(var_freq_poverty = ifelse(summary_est != 0, estimate / summary_est, NA))
+
+data_acs_poverty_level <- data_acs_poverty %>%
+  filter(variable %in% "pov_level_below100")
 data_acs_poverty_level <- data_acs_poverty_level %>%
-  mutate(var_freq_poverty_level = ifelse(summary_est != 0, estimate / summary_est, NA))
-rm(vars_acs_poverty_level)
+  rename(var_freq_poverty_level = var_freq_poverty)
+
+rm(vars_acs_poverty)
 
 
 ## Population below 150% of the poverty threshold
 # Combine the categories of below 100% of the poverty threshold + 100-149% of the poverty threshold, in order to obtain a composite number of the population below 150% of the poverty threshold
-data_acs_poverty_level_150 <- data_acs_poverty_level %>%
+data_acs_poverty_level_150 <- data_acs_poverty %>%
   mutate(category = case_when(
     variable %in% c("pov_level_below100", "pov_level_100to149") ~ "pov_level_below150",
     TRUE ~ NA_character_  # Handle cases that do not fall into these categories
@@ -322,6 +330,7 @@ data_acs_poverty_level_150 <- data_acs_poverty_level_150 %>%
     var_freq_poverty_level_150 = estimate / summary_est,
     .groups = 'drop'
   )
+rm(data_acs_poverty)
 
 
 ## Single-parent households with children aged < 18 y
@@ -465,6 +474,229 @@ data_acs_overcrowding <- data_acs_overcrowding %>%
   )
 rm(vars_acs_overcrowding)
 ```
+
+``` t
+Extract the variable frequencies, and merge datasets to create one dataset with the 17 variables used in the ADI.
+```
+
+```{r}
+## Combine variables
+
+datasets <- list(data_acs_less_highschool, data_acs_associates_college, data_acs_incomplete_plumbing, data_acs_no_telephone, data_acs_novehicle, data_acs_overcrowding, data_acs_poverty_level, data_acs_poverty_level_150, data_acs_unemployment, data_acs_whitecollar, data_dhc_homeownership, data_dhc_singleparent, data_acs_median_income, data_acs_median_rent, data_acs_gini, data_acs_home_value, data_acs_housing_costs)
+
+selected_datasets <- lapply(datasets, function(df) {
+  df %>%
+    select(GEOID, starts_with("var_"))
+})
+
+# Merge all datasets by GEOID
+merged_data <- selected_datasets[[1]]  # Start with the first dataset
+
+for (i in 2:length(selected_datasets)) {
+  merged_data <- full_join(merged_data, selected_datasets[[i]], by = "GEOID")
+}
+
+```
+
+``` t
+Import PLACES data, which contains health outcomes data.
+```
+
+```{r}
+data_places = read_csv("PLACES__Local_Data_for_Better_Health__Census_Tract_Data_2024_release_20241027.csv")
+
+# Filter to include only Pennsylvania, and only the obesity data
+data_places=data_places |> filter(StateAbbr=="PA") |> filter(Measure=="Obesity among adults")
+
+# rename variable "LocationName" to "GEOID" to be consistent with census data
+data_places <- data_places %>% 
+    rename("GEOID" = "LocationName")
+
+
+### REPLACE THE ABOVE WITH other method to import data (below), if it works
+```
+
+## Results {#sec-results}
+
+Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
+
+```{r}
+# What is our n?
+
+data_places %>%
+  inner_join(merged_data, by = "GEOID") %>%
+  distinct(GEOID) |> nrow()
+```
+
+```{r}
+# Count the missing data
+sum(is.na(data_acs_less_highschool$var_freq_lesshighschool))
+sum(is.na(data_acs_associates_college$var_freq_associates_college))
+sum(is.na(data_acs_incomplete_plumbing$var_freq_incomplete_plumbing))
+sum(is.na(data_acs_no_telephone$var_freq_no_telephone))
+sum(is.na(data_acs_novehicle$var_freq_novehicle))
+sum(is.na(data_acs_overcrowding$var_freq_overcrowding))
+sum(is.na(data_acs_poverty_level$var_freq_poverty_level))
+sum(is.na(data_acs_poverty_level_150$var_freq_poverty_level_150))
+sum(is.na(data_acs_unemployment$var_freq_unemployment))
+sum(is.na(data_acs_whitecollar$var_freq_whitecollar))
+sum(is.na(data_dhc_homeownership$var_freq_homeownership))
+sum(is.na(data_dhc_singleparent$var_freq_singleparent))
+sum(is.na(data_acs_median_income$var_median_income))
+sum(is.na(data_acs_median_rent$var_median_rent))
+sum(is.na(data_acs_gini$var_gini))
+sum(is.na(data_acs_home_value$var_home_value))
+sum(is.na(data_acs_housing_costs$var_housing_costs))
+```
+
+```{r}
+# Summary information for the variables of interest
+data_acs_less_highschool |> select(var_freq_lesshighschool) |> tbl_summary()
+data_acs_associates_college |> select(var_freq_associates_college) |> tbl_summary()
+data_acs_incomplete_plumbing |> select(var_freq_incomplete_plumbing) |> tbl_summary()
+data_acs_no_telephone |> select(var_freq_no_telephone) |> tbl_summary()
+data_acs_novehicle |> select(var_freq_novehicle) |> tbl_summary()
+data_acs_overcrowding |> select(var_freq_overcrowding) |> tbl_summary()
+data_acs_poverty_level |> select(var_freq_poverty_level) |> tbl_summary()
+data_acs_poverty_level_150 |> select(var_freq_poverty_level_150) |> tbl_summary()
+data_acs_unemployment |> select(var_freq_unemployment) |> tbl_summary()
+data_acs_whitecollar |> select(var_freq_whitecollar) |> tbl_summary()
+data_dhc_homeownership |> select(var_freq_homeownership) |> tbl_summary()
+data_dhc_singleparent |> select(var_freq_singleparent) |> tbl_summary()
+data_acs_median_income |> select(var_median_income) |> tbl_summary()
+data_acs_median_rent |> select(var_median_rent) |> tbl_summary()
+data_acs_gini |> select(var_gini) |> tbl_summary()
+data_acs_home_value |> select(var_home_value) |> tbl_summary()
+data_acs_housing_costs |> select(var_housing_costs) |> tbl_summary()
+
+```
+
+```{r}
+# Histograms of the data to visualize the data, see the data distributions
+
+ggplot(data = data_acs_less_highschool, aes(var_freq_lesshighschool)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+    labs(title = "Did not complete high school",
+       x = "Frequency per geographic area",
+       y = "Density")
+
+ggplot(data = data_acs_associates_college, aes(var_freq_associates_college)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Obtained an associate's or college degree")
+
+ggplot(data = data_acs_incomplete_plumbing, aes(var_freq_incomplete_plumbing)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Incomplete plumbing")
+
+ggplot(data = data_acs_no_telephone, aes(var_freq_no_telephone)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("No telephone")
+
+ggplot(data = data_acs_novehicle, aes(var_freq_novehicle)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("No vehicle")
+
+ggplot(data = data_acs_overcrowding, aes(var_freq_overcrowding)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Overcrowding (occupied hosuing units with more than 1 person per room")
+
+ggplot(data = data_acs_poverty_level, aes(var_freq_poverty_level)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Families below the poverty level")
+
+ggplot(data = data_acs_poverty_level_150, aes(var_freq_poverty_level_150)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Families below 150% of the poverty threshold")
+
+ggplot(data = data_acs_unemployment, aes(var_freq_unemployment)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Unemployment")
+
+ggplot(data = data_acs_whitecollar, aes(var_freq_whitecollar)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Employed persons in white-collar occupations")
+
+ggplot(data = data_dhc_homeownership, aes(var_freq_homeownership)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Home ownership")
+
+ggplot(data = data_dhc_singleparent, aes(var_freq_singleparent)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Single-parent households")
+
+ggplot(data = data_acs_median_income, aes(var_median_income)) +
+  geom_histogram(aes(y = after_stat(density)), breaks = seq(0, 80, 1)) +
+  geom_density(color = "red") +
+  ggtitle("Median Income")
+
+ggplot(data = data_acs_median_rent, aes(var_median_rent)) +
+  geom_histogram(aes(y = after_stat(density)), breaks = seq(0, 80, 1)) +
+  geom_density(color = "red") +
+  ggtitle("Median Rent")
+
+ggplot(data = data_acs_gini, aes(var_gini)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Income disparity, measured by Gini")
+
+ggplot(data = data_acs_home_value, aes(var_home_value)) +
+  geom_histogram(aes(y = after_stat(density)), breaks = seq(0, 80, 1)) +
+  geom_density(color = "red") +
+  ggtitle("Home value")
+
+ggplot(data = data_acs_housing_costs, aes(var_housing_costs)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("Housing costs")
+```
+
+``` t
+Perform Principal Component Analysis (PCA).
+```
+
+```{r}
+# We have to omit NA values before performing PCA.
+merged_data_clean <- na.omit(merged_data)
+merged_data_clean = merged_data_clean[ , 2:18]
+
+# Perform PCA
+merged.pca <- prcomp(merged_data_clean, scale = TRUE)
+print(merged.pca) #Displays std deviations of PCs and their loadings (i.e. coefficients)
+
+# Check proportion of variance explained by PCs
+summary(merged.pca)
+
+# Create a screeplot
+ggscreeplot(merged.pca)
+```
+
+``` t
+Perform factor analysis.
+```
+
+```{r}
+# Perform factor analysis (e.g., 2-factor solution)
+fa_result <- fa(merged_data_clean, nfactors = 2, rotate = "varimax")
+
+# Check the factor loadings
+fa_result$loadings
+```
+
+## Conclusion
+
+This the conclusion. The @sec-results can be invoked here.
 
 ```{r}
 # Other variables that may be of interest to study and potentially incorporate
@@ -662,52 +894,9 @@ data_acs_income_combined <- data_acs_income %>%
     .groups = 'drop'
   )
 rm(vars_acs_income)
-
-```
-
-``` t
-Extract the variable frequencies, and merge datasets.
 ```
 
 ```{r}
-## Combine variables
-
-datasets <- list(data_acs_education, data_acs_incomplete_plumbing, data_acs_no_telephone, data_acs_novehicle, data_acs_overcrowding, data_acs_poverty_level, data_acs_poverty_level_150, data_acs_unemployment, data_acs_whitecollar, data_dhc_homeownership, data_dhc_singleparent, data_acs_median_income, data_acs_median_rent, data_acs_gini, data_acs_home_value, data_acs_housing_costs)
-
-selected_datasets <- lapply(datasets, function(df) {
-  df %>%
-    select(GEOID, starts_with("var_"))
-})
-
-# Merge all datasets by GEOID
-merged_data <- selected_datasets[[1]]  # Start with the first dataset
-
-for (i in 2:length(selected_datasets)) {
-  merged_data <- full_join(merged_data, selected_datasets[[i]], by = "GEOID")
-}
-
-```
-
-```{r}
-## TO WORK ON
-## REDO FREQUENCIES OF EDUCATION (and any other variables that have multiple components)
-```
-
-```{r}
-# Read in PLACES data with health outcomes data
-data_places = read_csv("PLACES__Local_Data_for_Better_Health__Census_Tract_Data_2024_release_20241027.csv")
-
-# Filter to include only Pennsylvania, and only the obesity data
-data_places=data_places |> filter(StateAbbr=="PA") |> filter(Measure=="Obesity among adults")
-
-# rename variable "LocationName" to "GEOID" to be consistent with census data
-data_places <- data_places %>% 
-    rename("GEOID" = "LocationName")
-
-
-####################
-
-
 ### WHY DOES THIS NOT WORK?
 
 # Define the URL of the Excel file
@@ -725,82 +914,10 @@ data_places <- read_excel(temp_file)
 
 # View the first few rows of the data
 print(head(data_places))
-
-
 ```
 
-## Results {#sec-results}
-
-Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
-
-```{r}
-# What is our n?
-
-data_places %>%
-  inner_join(data_dhc_median_age, by = "GEOID") %>%
-  distinct(GEOID) |> nrow()
+``` t
+TO DO:
+- change from PA-specific to include entire US, in line with ADI
+- and/or can do both, and see if ADI calculations differ by state using a few
 ```
-
-```{r}
-# Count the missing data
-
-sum(is.na(data_acs_education_combined$var_freq_education))
-sum(is.na(data_acs_income_combined$var_freq_income))
-sum(is.na(data_acs_poverty_level$var_freq_poverty_level))
-sum(is.na(data_dhc_ethnicity$var_freq_ethnicity))
-sum(is.na(data_dhc_household_size$var_freq_household_size))
-sum(is.na(data_dhc_household_type$var_freq_household_type))
-sum(is.na(data_dhc_housing_occ$var_freq_housing_occ))
-sum(is.na(data_dhc_race$var_freq_race))
-sum(is.na(data_dhc_urban_p$value))
-sum(is.na(data_dhc_median_age$value))
-sum(is.na(data_places$Data_Value))
-
-data_dhc_median_age$GEOID[is.na(data_dhc_median_age$value)==T] # the tracts with missing median age
-```
-
-```{r}
-# Summary information for the variables of interest
-data_acs_education_combined |> select(category) |> tbl_summary()
-data_acs_income_combined |> select(category) |> tbl_summary()
-data_acs_poverty_level |> select(variable) |> tbl_summary()
-data_dhc_ethnicity |> select(variable) |> tbl_summary()
-data_dhc_household_size |> select(variable) |> tbl_summary()
-data_dhc_household_type |> select(variable) |> tbl_summary()
-data_dhc_housing_occ |> select(variable) |> tbl_summary()
-data_dhc_race |> select(variable) |> tbl_summary()
-
-# Median age
-ggplot(data = data_dhc_median_age, aes(value)) + 
-    geom_histogram(aes(y = after_stat(density)), breaks = seq(0, 80, 1), 
-                   color = "blue", fill = "blue", alpha = 0.7) +
-    geom_density(color = "red")
-# fairly normal distribution, so it is okay to use mean rather than median
-median(data_dhc_median_age$value, na.rm = T)
-
-# Percent urban vs rural
-mean(data_dhc_urban_p$var_freq_urban, na.rm = T)
-```
-
-```{r}
-# Graph the data basics
-
-avg_freq_acs_education_combined <- data_acs_education_combined |>
-  group_by(category) |>
-  summarize(avg_frequency = mean(var_freq_education, na.rm = TRUE))
-
-print(avg_freq_acs_education_combined)
-
-ggplot(avg_freq_acs_education_combined, aes(x = category, y = avg_frequency)) +
-  geom_bar(stat = "identity", fill = "steelblue") +
-  labs(title = "Average Frequencies by Category",
-       x = "Category",
-       y = "Average Frequency") +
-  theme_minimal()
-
-
-```
-
-## Conclusion
-
-This the conclusion. The @sec-results can be invoked here.
