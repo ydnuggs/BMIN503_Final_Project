@@ -1,7 +1,7 @@
 ---
-title: "Your Title"
+title: "Area Deprivation Index for 2020"
 subtitle: "BMIN503/EPID600 Final Project"
-author: "FirstName LastName"
+author: "Dana Neugut"
 format: html
 editor: visual
 number-sections: true
@@ -10,21 +10,17 @@ embed-resources: true
 
 ------------------------------------------------------------------------
 
-Use this template to complete your project throughout the course. Your Final Project presentation will be based on the contents of this document. Replace the title/name above and text below with your own, but keep the headers. Feel free to change the theme and other display settings, although this is not required.
-
 ## Overview {#sec-overview}
 
 Social determinants of health have a notable impact on health outcomes. The Area Deprivation Index (ADI) is a composite measure of “deprivation,” based on census block data from 1969 through 1998, that can be used in health outcomes research. In this project, we update the ADI using more recent census data.
 
-I met with Drs. Amanda Muir and Lindsey Albenberg to gain insight on which census variables may be helpful to include in initial analyses, and to discuss analytic approaches. This project can be found at *link to GitHub repository*.
+I met with Drs. Amanda Muir and Lindsey Albenberg to gain insight on which census variables may be helpful to include in initial analyses, and to discuss analytic approaches. This project can be found at this [link to GitHub repository](https://github.com/ydnuggs/BMIN503_Final_Project).
 
 ## Introduction {#sec-introduction}
 
-In 2003 -----, Gopal Singh published the Area Deprivation Index (ADI), a “composite area-based deprivation index for the United States” based on census data from 1969 and 1998. It has become a tool used to examine, on an area-based scale, how social determinants of health can have an impact on outcomes such as mortality. The Area Deprivation Index uses factor score coefficients based on census data. However, neighborhoods and their sociodemographic can change over time; therefore, it is important to re-examine these calculations intermittently. In this project, we use recent data from the 2020 U.S. decennial census and the 2016-2020 5-year American Community Survey (ACS) to reconstruct the ADI and re-calculate the factor score coefficients. We then test whether the ADI is associated with several health outcomes, using tract level data.
+In 2002, Gopal Singh published the Area Deprivation Index (ADI), a “composite area-based deprivation index for the United States” based on census data from 1969 and 1998. It has become a tool used to examine, on an area-based scale, how social determinants of health can have an impact on outcomes such as mortality. The Area Deprivation Index uses factor score coefficients based on census data. However, neighborhoods and their sociodemographic can change over time; therefore, it is important to re-examine these calculations intermittently. Furthermore, associations can differ by states, where there are different laws and demographic factors affecting access to resources. In this project, we use recent data from the 2020 U.S. decennial census and the 2016-2020 5-year American Community Survey (ACS) to reconstruct the ADI for Pennsylvania and re-calculate the factor score coefficients. We then test whether the ADI is associated with several health outcomes, using tract level data.
 
 The ADI is useful for health disparities research, which is an important area in all fields of research. There are several other indices that measure socioeconomic status (SES) in some way; these include the Townsend Deprivation Index, Social Disadvantage Index, and others. The ADI is one of the oldest validated indices for SES, and so we use it in this paper. Future research can include doing similar analyses for other commonly used SES indices.
-
------ insert citations
 
 ## Methods {#sec-methods}
 
@@ -42,6 +38,11 @@ library(gtsummary)
 library(readxl)
 library(ggbiplot)
 library(psych)
+library(knitr)
+library(gridExtra)
+library(tigris)
+options(tigris_use_cache = TRUE)
+options(progress_enabled = FALSE)
 ```
 
 ```{r}
@@ -420,7 +421,6 @@ rm(vars_acs_no_telephone)
 
 
 ## Occupied housing units without complete plumbing, % (log)
-# NEED TO CHANGE TO LOG?
 vars_acs_incomplete_plumbing = c(
         #all = "B25048_001", #plumbing facilities for occupied housing units
         incomplete_plumbing = "B25048_003" #Lacking complete plumbing facilities, for occupied housing units
@@ -476,7 +476,7 @@ rm(vars_acs_overcrowding)
 ```
 
 ``` t
-Extract the variable frequencies, and merge datasets to create one dataset with the 17 variables used in the ADI.
+Extract the variable frequencies, and merge datasets to create one dataset with the 17 variables used in the ADI (as listed in PMID 12835199).
 ```
 
 ```{r}
@@ -499,87 +499,20 @@ for (i in 2:length(selected_datasets)) {
 ```
 
 ``` t
-Import PLACES data, which contains health outcomes data.
+Next we visualize the demographic variables. For the variables without a Normal distribution, we log transform them to see if that achieves Normalization.
 ```
 
 ```{r}
-data_places = read_csv("PLACES__Local_Data_for_Better_Health__Census_Tract_Data_2024_release_20241027.csv")
-
-# Filter to include only Pennsylvania, and only the obesity data
-data_places=data_places |> filter(StateAbbr=="PA") |> filter(Measure=="Obesity among adults")
-
-# rename variable "LocationName" to "GEOID" to be consistent with census data
-data_places <- data_places %>% 
-    rename("GEOID" = "LocationName")
-
-
-### REPLACE THE ABOVE WITH other method to import data (below), if it works
-```
-
-## Results {#sec-results}
-
-Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
-
-```{r}
-# What is our n?
-
-data_places %>%
-  inner_join(merged_data, by = "GEOID") %>%
-  distinct(GEOID) |> nrow()
-```
-
-```{r}
-# Count the missing data
-sum(is.na(data_acs_less_highschool$var_freq_lesshighschool))
-sum(is.na(data_acs_associates_college$var_freq_associates_college))
-sum(is.na(data_acs_incomplete_plumbing$var_freq_incomplete_plumbing))
-sum(is.na(data_acs_no_telephone$var_freq_no_telephone))
-sum(is.na(data_acs_novehicle$var_freq_novehicle))
-sum(is.na(data_acs_overcrowding$var_freq_overcrowding))
-sum(is.na(data_acs_poverty_level$var_freq_poverty_level))
-sum(is.na(data_acs_poverty_level_150$var_freq_poverty_level_150))
-sum(is.na(data_acs_unemployment$var_freq_unemployment))
-sum(is.na(data_acs_whitecollar$var_freq_whitecollar))
-sum(is.na(data_dhc_homeownership$var_freq_homeownership))
-sum(is.na(data_dhc_singleparent$var_freq_singleparent))
-sum(is.na(data_acs_median_income$var_median_income))
-sum(is.na(data_acs_median_rent$var_median_rent))
-sum(is.na(data_acs_gini$var_gini))
-sum(is.na(data_acs_home_value$var_home_value))
-sum(is.na(data_acs_housing_costs$var_housing_costs))
-```
-
-```{r}
-# Summary information for the variables of interest
-data_acs_less_highschool |> select(var_freq_lesshighschool) |> tbl_summary()
-data_acs_associates_college |> select(var_freq_associates_college) |> tbl_summary()
-data_acs_incomplete_plumbing |> select(var_freq_incomplete_plumbing) |> tbl_summary()
-data_acs_no_telephone |> select(var_freq_no_telephone) |> tbl_summary()
-data_acs_novehicle |> select(var_freq_novehicle) |> tbl_summary()
-data_acs_overcrowding |> select(var_freq_overcrowding) |> tbl_summary()
-data_acs_poverty_level |> select(var_freq_poverty_level) |> tbl_summary()
-data_acs_poverty_level_150 |> select(var_freq_poverty_level_150) |> tbl_summary()
-data_acs_unemployment |> select(var_freq_unemployment) |> tbl_summary()
-data_acs_whitecollar |> select(var_freq_whitecollar) |> tbl_summary()
-data_dhc_homeownership |> select(var_freq_homeownership) |> tbl_summary()
-data_dhc_singleparent |> select(var_freq_singleparent) |> tbl_summary()
-data_acs_median_income |> select(var_median_income) |> tbl_summary()
-data_acs_median_rent |> select(var_median_rent) |> tbl_summary()
-data_acs_gini |> select(var_gini) |> tbl_summary()
-data_acs_home_value |> select(var_home_value) |> tbl_summary()
-data_acs_housing_costs |> select(var_housing_costs) |> tbl_summary()
-
-```
-
-```{r}
-# Histograms of the data to visualize the data, see the data distributions
+# Histograms of the data to visualize the data distributions
 
 ggplot(data = data_acs_less_highschool, aes(var_freq_lesshighschool)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
-    labs(title = "Did not complete high school",
-       x = "Frequency per geographic area",
-       y = "Density")
+    ggtitle("Did not complete high school")
+ggplot(data = data_acs_less_highschool, aes(log(var_freq_lesshighschool))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+    ggtitle("LOG Did not complete high school")
 
 ggplot(data = data_acs_associates_college, aes(var_freq_associates_college)) +
   geom_histogram(aes(y = after_stat(density))) +
@@ -590,36 +523,64 @@ ggplot(data = data_acs_incomplete_plumbing, aes(var_freq_incomplete_plumbing)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("Incomplete plumbing")
+ggplot(data = data_acs_incomplete_plumbing, aes(log(var_freq_incomplete_plumbing))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("LOG Incomplete plumbing")
 
 ggplot(data = data_acs_no_telephone, aes(var_freq_no_telephone)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("No telephone")
+ggplot(data = data_acs_no_telephone, aes(log(var_freq_no_telephone))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("LOG No telephone")
 
 ggplot(data = data_acs_novehicle, aes(var_freq_novehicle)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("No vehicle")
+ggplot(data = data_acs_novehicle, aes(log(var_freq_novehicle))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("LOG No vehicle")
 
 ggplot(data = data_acs_overcrowding, aes(var_freq_overcrowding)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("Overcrowding (occupied hosuing units with more than 1 person per room")
+ggplot(data = data_acs_overcrowding, aes(log(var_freq_overcrowding))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("LOG Overcrowding (occupied hosuing units with more than 1 person per room")
 
 ggplot(data = data_acs_poverty_level, aes(var_freq_poverty_level)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("Families below the poverty level")
+ggplot(data = data_acs_poverty_level, aes(log(var_freq_poverty_level))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("LOG Families below the poverty level")
 
 ggplot(data = data_acs_poverty_level_150, aes(var_freq_poverty_level_150)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("Families below 150% of the poverty threshold")
+ggplot(data = data_acs_poverty_level_150, aes(log(var_freq_poverty_level_150))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("LOG Families below 150% of the poverty threshold")
 
 ggplot(data = data_acs_unemployment, aes(var_freq_unemployment)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("Unemployment")
+ggplot(data = data_acs_unemployment, aes(log(var_freq_unemployment))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("LOG Unemployment")
 
 ggplot(data = data_acs_whitecollar, aes(var_freq_whitecollar)) +
   geom_histogram(aes(y = after_stat(density))) +
@@ -635,6 +596,10 @@ ggplot(data = data_dhc_singleparent, aes(var_freq_singleparent)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("Single-parent households")
+ggplot(data = data_dhc_singleparent, aes(log(var_freq_singleparent))) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(color = "red") +
+  ggtitle("LOG Single-parent households")
 
 ggplot(data = data_acs_median_income, aes(var_median_income)) +
   geom_histogram(aes(y = after_stat(density)), breaks = seq(0, 80, 1)) +
@@ -660,6 +625,326 @@ ggplot(data = data_acs_housing_costs, aes(var_housing_costs)) +
   geom_histogram(aes(y = after_stat(density))) +
   geom_density(color = "red") +
   ggtitle("Housing costs")
+```
+
+``` t
+Nine of the demographic variables benefited from log transformation. They are:
+var_freq_lesshighschool
+var_freq_incomplete_plumbing
+var_freq_no_telephone
+var_freq_novehicle
+var_freq_overcrowding
+var_freq_poverty_level
+var_freq_poverty_level_150
+var_freq_unemployment
+var_freq_singleparent
+```
+
+``` t
+We therefore update these nine variables with their log transformation.
+
+For values of 0, we add a small constant (1e-5) before applying the log transformation. This avoids taking the log of zero, thus eliminating -Inf. We do this instead of replacing the values with "NA" because the zeroes are real, and we do not want to lose them from our dataset.
+```
+
+```{r}
+# List of variables to log-transform
+variables_to_log <- c(
+  "var_freq_lesshighschool",
+  "var_freq_incomplete_plumbing",
+  "var_freq_no_telephone",
+  "var_freq_novehicle",
+  "var_freq_overcrowding",
+  "var_freq_poverty_level",
+  "var_freq_poverty_level_150",
+  "var_freq_unemployment",
+  "var_freq_singleparent"
+)
+
+# Apply log transformation and rename variables
+merged_data <- merged_data %>%
+  mutate(across(
+    all_of(variables_to_log), 
+    ~ log(. + 1e-5), 
+    .names = "{.col}_log"
+  ))
+```
+
+``` t
+Import CDC PLACES data, which contains health outcomes data.
+```
+
+```{r}
+# The data is taken from the following URL. Unfortunately the code to import the data is not working properly, so we downloaded it as a CSV file and here import the file.
+# https://data.cdc.gov/download/PLACES-Local-Data-for-Better-Health-Census-Tract-D/excel/PLACES-Local-Data-for-Better-Health-Census-Tract-D.xlsx
+
+data_places = read_csv("PLACES__Local_Data_for_Better_Health__Census_Tract_Data_2024_release_20241027.csv")
+
+# rename variable "LocationName" to "GEOID" to be consistent with census data
+data_places <- data_places %>% 
+    rename("GEOID" = "LocationName")
+
+# Filter to include only Pennsylvania
+data_places=data_places |> filter(StateAbbr=="PA")
+```
+
+``` t
+Create a dataset of several important health outcomes. Of note, mortality data is not included, as it is not available via PLACES, and special permission is required for access.
+The health outcomes data is expressed as a frequency.
+```
+
+```{r}
+# Filter to include only the obesity data
+data_places_obesity=data_places |> filter(Measure=="Obesity among adults") |> select(GEOID, Data_Value) |> rename(Rate_Obesity = Data_Value)
+
+# Filter to include stroke data
+data_places_stroke=data_places |> filter(Measure=="Stroke among adults") |> select(GEOID, Data_Value) |> rename(Rate_Stroke = Data_Value)
+
+# Filter to include coronary heart disease data
+data_places_heart=data_places |> filter(Measure=="Coronary heart disease among adults") |> select(GEOID, Data_Value) |> rename(Rate_Heart = Data_Value)
+
+# Filter to include disability data
+data_places_disability=data_places |> filter(Measure=="Any disability among adults") |> select(GEOID, Data_Value) |> rename(Rate_Disability = Data_Value)
+
+# Filter to include fair or poor self-rated health status
+data_places_healthrating=data_places |> filter(Measure=="Fair or poor self-rated health status among adults") |> select(GEOID, Data_Value) |> rename(Rate_Healthrating = Data_Value)
+
+merged_outcomes = data_places_obesity |>
+  left_join(data_places_stroke, by = "GEOID") |>
+  left_join(data_places_heart, by = "GEOID") |>
+  left_join(data_places_disability, by = "GEOID") |>
+  left_join(data_places_healthrating, by = "GEOID")
+
+## We check if there are values in the demographic data that are not within the health outcomes data, or vice versa.
+length(setdiff(merged_data$GEOID, merged_outcomes$GEOID)) #There are 38 rows in the demographic data that are not in the health outcomes data.
+
+# We check the data for the missing tracts. We sample a few of them.
+setdiff(merged_data$GEOID, merged_outcomes$GEOID)
+merged_data %>% filter(GEOID == 42101036901) #an example of one we checked
+# They seem to be empty aside from the GEOID in the demographic dataset. It seems that for whatever reason, this tract does not have any demographic data and it is okay to remove them from the analyses, and use only those with demographic and outcomes data.
+
+```
+
+``` t
+First we check how many tracts are included in our dataset with both demographic and health outcomes data.
+```
+
+```{r}
+# Number of tracts with demographic data
+num_tracts_demographic <- merged_data |> distinct(GEOID) |> nrow()
+
+# Number of tracts with health outcomes data
+num_tracts_health_outcomes <- merged_outcomes |> distinct(GEOID) |> nrow()
+
+# Number of tracts with both demographic and health outcomes data
+num_tracts_both <- merged_outcomes |> inner_join(merged_data, by = "GEOID") |> distinct(GEOID) |> nrow()
+
+# Create a summary table
+summary_table <- data.frame(
+  Category = c("# Tracts with Demographic Data", "# Tracts with Health Outcomes Data", "# Tracts with Both Demographic and Health Outcomes Data"),
+  Number_of_Tracts = c(num_tracts_demographic, num_tracts_health_outcomes, num_tracts_both)
+)
+
+# Print the summary table
+kable(summary_table, caption = "Summary of Tracts with Data", align = c("l", "r"), digits = 0)
+```
+
+``` t
+Next we check our data missingness.
+```
+
+```{r}
+# List of demographic variables
+vars_demographic <- c(
+  "var_freq_lesshighschool_log", 
+  "var_freq_associates_college", 
+  "var_freq_incomplete_plumbing_log", 
+  "var_freq_no_telephone_log", 
+  "var_freq_novehicle_log", 
+  "var_freq_overcrowding_log", 
+  "var_freq_poverty_level_log", 
+  "var_freq_poverty_level_150_log", 
+  "var_freq_unemployment_log", 
+  "var_freq_whitecollar", 
+  "var_freq_homeownership", 
+  "var_freq_singleparent_log", 
+  "var_median_income", 
+  "var_median_rent", 
+  "var_gini", 
+  "var_home_value", 
+  "var_housing_costs"
+)
+
+# Subset the dataframe to include only the columns you're interested in
+merged_data_subset <- merged_data[, vars_of_interest]
+
+# Calculate the missingness for each variable
+missingness_table <- data.frame(
+  Variable = colnames(merged_data_subset),  # List of variables
+  Missingness = sapply(colnames(merged_data_subset), function(var) {
+    # Calculate the percentage of missing values for each variable
+    mean(is.na(merged_data_subset[[var]]), na.rm = TRUE) * 100
+  })
+)
+
+# Reset row names to avoid duplication issues in kable
+rownames(missingness_table) <- NULL
+
+# Print the table using kable to make it more presentable
+missingness_table %>%
+  kable(col.names = c("Variable", "Missing Data Count"),
+        caption = "Missing Data Count for Demographic Variables",
+        align = c("l", "r"),
+        format = "markdown")
+
+# List of outcomes variables
+vars_outcomes <- c(
+  "Rate_Obesity", 
+  "Rate_Stroke", 
+  "Rate_Heart", 
+  "Rate_Disability", 
+  "Rate_Healthrating"
+)
+
+# Subset the dataframe to include only the columns you're interested in
+merged_data_subset <- merged_outcomes[, vars_outcomes]
+
+# Calculate the missingness for each variable
+missingness_table <- data.frame(
+  Variable = colnames(merged_data_subset),  # List of variables
+  Missingness = sapply(colnames(merged_data_subset), function(var) {
+    # Calculate the percentage of missing values for each variable
+    mean(is.na(merged_data_subset[[var]]), na.rm = TRUE) * 100
+  })
+)
+
+# Reset row names to avoid duplication issues in kable
+rownames(missingness_table) <- NULL
+
+# Print the table using kable to make it more presentable
+missingness_table %>%
+  kable(col.names = c("Variable", "Missing Data Count"),
+        caption = "Missing Data Count for Health Outcomes Variables",
+        align = c("l", "r"),
+        format = "markdown")
+
+```
+
+## Results {#sec-results}
+
+Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
+
+``` t
+First, we examine the distributions of the health outcomes data.
+```
+
+```{r}
+# Disability
+plot_disability = ggplot(merged_outcomes, aes(x = Rate_Disability)) + 
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Disability Data", 
+       x = "Disability Percentage", 
+       y = "Frequency") +
+  theme_minimal()
+
+# Health Self-Rating
+plot_healthrating = ggplot(merged_outcomes, aes(x = Rate_Healthrating)) + 
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Health Self-Rating Data", 
+       x = "Health Self-Rating Percentage", 
+       y = "Frequency") +
+  theme_minimal()
+
+# Coronary Heart Disease
+plot_heart = ggplot(merged_outcomes, aes(x = Rate_Heart)) + 
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Coronary Heart Disease Data", 
+       x = "Coronary Heart Disease Percentage", 
+       y = "Frequency") +
+  theme_minimal()
+
+# Obesity
+plot_obesity = ggplot(merged_outcomes, aes(x = Rate_Obesity)) + 
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Obesity Data", 
+       x = "Obesity Percentage", 
+       y = "Frequency") +
+  theme_minimal()
+
+# Stroke
+plot_stroke = ggplot(merged_outcomes, aes(x = Rate_Stroke)) + 
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Stroke Data", 
+       x = "Stroke Percentage", 
+       y = "Frequency") +
+  theme_minimal()
+
+# Combine the plots into one graphic
+grid.arrange(plot_disability, plot_healthrating, plot_heart, plot_obesity, plot_stroke, ncol = 2)
+
+```
+
+``` t
+Next we create choropleth maps.
+```
+
+```{r}
+# We start by creating a base map of Pennsylvania.
+pa.tracts = tracts(cb = TRUE, resolution = "500k",year="2020")
+
+pa.tracts = pa.tracts |>  filter(STATEFP == 42)
+
+ggplot(data = st_simplify(pa.tracts, dTolerance = 1e3)) +
+  geom_sf() +
+  ggtitle("Pennsylvania Tracts")
+```
+
+```{r}
+merged_data_outcomes <- pa.tracts %>%
+  inner_join(merged_outcomes, by = c("GEOID" = "GEOID"))
+
+# Create choropleth maps
+plot_obesity = ggplot(data = merged_data_outcomes) +
+  geom_sf(aes(fill = Rate_Obesity), color = "white", size = 0.2) + 
+  scale_fill_viridis_c(option = "C") +  # You can change this to a different color scale
+  labs(title = "Obesity Percentage by Census Tract",
+       fill = "Obesity %") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+plot_stroke = ggplot(data = merged_data_outcomes) +
+  geom_sf(aes(fill = Rate_Stroke), color = "white", size = 0.2) + 
+  scale_fill_viridis_c(option = "C") +
+  labs(title = "Stroke Percentage by Census Tract",
+       fill = "Stroke %") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+plot_heart = ggplot(data = merged_data_outcomes) +
+  geom_sf(aes(fill = Rate_Heart), color = "white", size = 0.2) + 
+  scale_fill_viridis_c(option = "C") +
+  labs(title = "Coronary Heart Disease Percentage by Census Tract",
+       fill = "Coronary Heart Disease %") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+plot_disability = ggplot(data = merged_data_outcomes) +
+  geom_sf(aes(fill = Rate_Disability), color = "white", size = 0.2) + 
+  scale_fill_viridis_c(option = "C") +
+  labs(title = "Disability Percentage by Census Tract",
+       fill = "Disability %") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+plot_healthrating = ggplot(data = merged_data_outcomes) +
+  geom_sf(aes(fill = Rate_Healthrating), color = "white", size = 0.2) + 
+  scale_fill_viridis_c(option = "C") +
+  labs(title = "Health Rating Average by Census Tract",
+       fill = "Health Rating %") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Combine the plots into one graphic
+grid.arrange(plot_disability, plot_healthrating, plot_heart, plot_obesity, plot_stroke, ncol = 2)
 ```
 
 ``` t
@@ -914,6 +1199,53 @@ data_places <- read_excel(temp_file)
 
 # View the first few rows of the data
 print(head(data_places))
+```
+
+## References
+
+``` t
+Centers for Disease Control and Prevention. (2024). PLACES: Local Data for Better Health, Census Tract Data 2024 release mortality. U.S. Department of Health & Human Services. https://data.cdc.gov/500-Cities-Places/PLACES-Local-Data-for-Better-Health-Census-Tract-D/cwsq-ngmh/data_preview. Accessed November 21, 2024.
+
+Kind AJ, Jencks S, Brock J, Yu M, Bartels C, Ehlenbach W, Greenberg C, Smith M. Neighborhood socioeconomic disadvantage and 30-day rehospitalization: a retrospective cohort study. Ann Intern Med. 2014 Dec 2;161(11):765-74. doi: 10.7326/M13-2946. PMID: 25437404; PMCID: PMC4251560.
+
+Singh GK. Area deprivation and widening inequalities in US mortality, 1969-1998. Am J Public Health. 2003 Jul;93(7):1137-43. doi: 10.2105/ajph.93.7.1137. PMID: 12835199; PMCID: PMC1447923.
+
+Singh GK, Siahpush M. Increasing inequalities in all-cause and cardiovascular mortality among US adults aged 25-64 years by area socioeconomic status, 1969-1998. Int J Epidemiol. 2002 Jun;31(3):600-13. doi: 10.1093/ije/31.3.600. PMID: 12055162.
+```
+
+## Supplement
+
+These are some additional calculations and graphicst that were used in the data preparation and cleaning.
+
+``` t
+This is summary information for the variables of interest.
+```
+
+```{r}
+# Summary information for the variables of interest
+data_acs_less_highschool |> select(var_freq_lesshighschool) |> tbl_summary()
+data_acs_associates_college |> select(var_freq_associates_college) |> tbl_summary()
+data_acs_incomplete_plumbing |> select(var_freq_incomplete_plumbing) |> tbl_summary()
+data_acs_no_telephone |> select(var_freq_no_telephone) |> tbl_summary()
+data_acs_novehicle |> select(var_freq_novehicle) |> tbl_summary()
+data_acs_overcrowding |> select(var_freq_overcrowding) |> tbl_summary()
+data_acs_poverty_level |> select(var_freq_poverty_level) |> tbl_summary()
+data_acs_poverty_level_150 |> select(var_freq_poverty_level_150) |> tbl_summary()
+data_acs_unemployment |> select(var_freq_unemployment) |> tbl_summary()
+data_acs_whitecollar |> select(var_freq_whitecollar) |> tbl_summary()
+data_dhc_homeownership |> select(var_freq_homeownership) |> tbl_summary()
+data_dhc_singleparent |> select(var_freq_singleparent) |> tbl_summary()
+data_acs_median_income |> select(var_median_income) |> tbl_summary()
+data_acs_median_rent |> select(var_median_rent) |> tbl_summary()
+data_acs_gini |> select(var_gini) |> tbl_summary()
+data_acs_home_value |> select(var_home_value) |> tbl_summary()
+data_acs_housing_costs |> select(var_housing_costs) |> tbl_summary()
+
+data_places_obesity |> select(Data_Value) |> tbl_summary()
+data_places_stroke |> select(Data_Value) |> tbl_summary()
+data_places_heart |> select(Data_Value) |> tbl_summary()
+data_places_disability |> select(Data_Value) |> tbl_summary()
+data_places_healthrating |> select(Data_Value) |> tbl_summary()
 ```
 
 ``` t
