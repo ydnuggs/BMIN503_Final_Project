@@ -18,15 +18,15 @@ I met with Drs. Amanda Muir and Lindsey Albenberg to gain insight on which censu
 
 ## Introduction {#sec-introduction}
 
-In 2002, Gopal Singh published the Area Deprivation Index (ADI), a “composite area-based deprivation index for the United States” based on census data from 1969 and 1998. It has become a tool used to examine, on an area-based scale, how social determinants of health can have an impact on outcomes such as mortality. The Area Deprivation Index uses factor score coefficients based on census data. However, neighborhoods and their sociodemographic can change over time; therefore, it is important to re-examine these calculations intermittently. Furthermore, associations can differ by states, where there are different laws and demographic factors affecting access to resources. In this project, we use recent data from the 2020 U.S. decennial census and the 2016-2020 5-year American Community Survey (ACS) to reconstruct the ADI for Pennsylvania and re-calculate the factor score coefficients. We then test whether the ADI is associated with several health outcomes, using tract level data.
+In 2002, Gopal Singh published the Area Deprivation Index (ADI), a “composite area-based deprivation index for the United States” based on census data from 1969 and 1998. It has become a tool used to examine, on an area-based scale, how social determinants of health can have an impact on health outcomes. The Area Deprivation Index uses factor score coefficients based on census data. However, neighborhoods and their sociodemographic characteristics can change over time; therefore, it is important to re-examine these calculations intermittently. Furthermore, associations can differ by states, where there are different laws and demographic factors affecting access to resources. In this project, we use recent data from the 2020 U.S. decennial census and the 2016-2020 5-year American Community Survey (ACS) to reconstruct the ADI for Pennsylvania and re-calculate the factor score coefficients. We then test whether the ADI is associated with several health outcomes, using tract level data.
 
-The ADI is useful for health disparities research, which is an important area in all fields of research. There are several other indices that measure socioeconomic status (SES) in some way; these include the Townsend Deprivation Index, Social Disadvantage Index, and others. The ADI is one of the oldest validated indices for SES, and so we use it in this paper. Future research can include doing similar analyses for other commonly used SES indices.
+The ADI is useful for health disparities research, which is an important area in all fields of research. There are several other indices that measure socioeconomic status (SES) in some way; these include the Townsend Deprivation Index, Social Disadvantage Index, and others. The ADI is one of the oldest validated indices for SES, and therefore it is the one we use in this paper. Future research can include doing similar analyses for other commonly used SES indices.
 
 ## Methods {#sec-methods}
 
-Describe the data used and general methodological approach used to address the problem described in the @sec-introduction. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why.
+In order to calculate the ADI for Pennsylvania in 2020, we first analyze the 17 sociodemographic factors that Singh described in his paper. We import these from the Decennial Census and American Community Survey. We visualize each characteristic and log-transform those without a Normal distribution. We then use factor analysis to calculate the ADI. We import health outcomes data from PLACES. Lastly, we test whether the ADI is associated with health outcomes data.
 
-```{r}
+```{r library}
 # Load necessary packages
 library(tidyverse)
 library(gtsummary)
@@ -40,21 +40,65 @@ library(readxl)
 library(ggbiplot)
 library(psych)
 library(knitr)
+library(kableExtra)
 library(gridExtra)
 library(tigris)
 options(tigris_use_cache = TRUE)
 options(progress_enabled = FALSE)
 ```
 
-```{r}
+```{r census_API}
 # Use a Census API Key to perform queries with tidycensus in R, to use data from the Decennial Census and the American Community Survey (ACS).
 #| eval: FALSE 
 census_api_key("8d4ae400e665d714446a25ed86d77a9125c57ec6", install = TRUE, overwrite = TRUE)
 ```
 
-``` t
-We create a dataset with the 2020 Decennial Census variables with Demographic and Housing Characteristics (DHC). We do the same for the 2016-2020 ACS 5-year Variables. These datasets can be used to identify the variables of interest based on their decriptions in the files.
+These are the factors from Singh's seminal paper, and their corresponding factor score coefficients, that we seek to replicate in 2020 Pennsylvania (as listed in PMID 12835199).
+
+```{r Singh_factors}
+# Create the data frame with the characteristics and corresponding factor score coefficients
+data_singh <- data.frame(
+  Characteristic = c(
+    "Percent of the block group’s population aged ≥ 25 years with < 9 years of education",
+    "Percent aged ≥ 25 years with greater than or equal to a high school diploma",
+    "Percent of employed persons ≥16 years of age in white-collar occupations",
+    "Median family income",
+    "Income disparity",
+    "Median home value",
+    "Median gross rent",
+    "Median monthly mortgage",
+    "Percent owner-occupied housing units (home ownership rate)",
+    "Percent of civilian labor force population ≥ 16 years of age unemployed (unemployment rate)",
+    "Percent of families below the poverty level",
+    "Percent of population below 150% of the poverty threshold",
+    "Percent of single-parent households with children < 18 years of age",
+    "Percent of occupied housing units without a motor vehicle",
+    "Percent of occupied housing units without a telephone",
+    "Percent of occupied housing units without complete plumbing (log)",
+    "Percent of occupied housing units with more than one person per room (crowding)"
+  ),
+  Factor_Score_Coefficient = c(
+    0.0849, -0.0970, -0.0874, -0.0977, 0.0936, -0.0688, -0.0781, 
+    -0.0770, -0.0615, 0.0806, 0.0977, 0.1037, 0.0719, 0.0694, 
+    0.0877, 0.0510, 0.0556
+  )
+)
+
+# View the table
+data_singh |>
+  kable(format = "html", col.names = c("Census Block Characteristics", "Factor Score Coefficients")) |>
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position = "center"
+  ) |>
+  column_spec(1, width = "20em") |>
+  column_spec(2, width = "10em")
+
+rm(data_singh)
 ```
+
+We create a dataset with the 2020 Decennial Census variables from the Demographic and Housing Characteristics (DHC) dataset. We do the same for the 2016-2020 ACS 5-year Variables. These datasets can be used to identify the variables of interest based on their decriptions in the files.
 
 ```{r}
 # 2020 Decennial Census variables with Demographic and Housing Characteristics
@@ -72,9 +116,7 @@ acs_2020_vars <- load_variables(
 )
 ```
 
-``` t
-We then create datasets with each variable/s of interest. The survey datasets contain data counts and the total count surveyed, per geographic area. Therefore, we also calculate a frequency, which is the count divided by the total count, for each variable. Some variables contain sub-categories that are not of particular interest to us, so in those cases we combine multiple sub-categories to obtain the broader categories in which we are interested (for example, we combine the frequency of male single parents and of female single parents within the population, to obtain a total frequency of single parents).
-```
+We then create datasets with each variable/s of interest. The survey datasets contain data counts and the total count surveyed, per geographic area. Therefore, we also calculate a frequency, which is the count divided by the total count, for each variable. Some variables contain sub-categories that are not of particular interest to us, so in these cases we combine multiple sub-categories to obtain the broader categories in which we are interested (for example, we combine the frequency of male single parents and of female single parents within the population, to obtain a total frequency of single parents).
 
 ```{r}
 ## educational attainment
@@ -476,9 +518,7 @@ data_acs_overcrowding <- data_acs_overcrowding %>%
 rm(vars_acs_overcrowding)
 ```
 
-``` t
-Extract the variable frequencies, and merge datasets to create one dataset with the 17 variables used in the ADI (as listed in PMID 12835199).
-```
+Extract the variable frequencies, and merge datasets to create one dataset with the 17 variables used in the ADI.
 
 ```{r}
 ## Combine variables
@@ -496,12 +536,9 @@ merged_data <- selected_datasets[[1]]  # Start with the first dataset
 for (i in 2:length(selected_datasets)) {
   merged_data <- full_join(merged_data, selected_datasets[[i]], by = "GEOID")
 }
-
 ```
 
-``` t
 Next we visualize the demographic variables. For the variables without a Normal distribution, we log transform them to see if that achieves Normalization.
-```
 
 ```{r}
 # Histograms of the data to visualize the data distributions
@@ -628,8 +665,9 @@ ggplot(data = data_acs_housing_costs, aes(var_housing_costs)) +
   ggtitle("Housing costs")
 ```
 
-``` t
 Nine of the demographic variables benefited from log transformation. They are:
+
+``` t
 var_freq_lesshighschool
 var_freq_incomplete_plumbing
 var_freq_no_telephone
@@ -641,11 +679,9 @@ var_freq_unemployment
 var_freq_singleparent
 ```
 
-``` t
 We therefore update these nine variables with their log transformation.
 
 For values of 0, we add a small constant (1e-5) before applying the log transformation. This avoids taking the log of zero, thus eliminating -Inf. We do this instead of replacing the values with "NA" because the zeroes are real, and we do not want to lose them from our dataset.
-```
 
 ```{r}
 # List of variables to log-transform
@@ -670,9 +706,7 @@ merged_data <- merged_data %>%
   ))
 ```
 
-``` t
 Import CDC PLACES data, which contains health outcomes data.
-```
 
 ```{r}
 # The data is taken from the following URL. Unfortunately the code to import the data is not working properly, so we downloaded it as a CSV file and here import the file.
@@ -688,10 +722,7 @@ data_places <- data_places %>%
 data_places=data_places |> filter(StateAbbr=="PA")
 ```
 
-``` t
-Create a dataset of several important health outcomes. Of note, mortality data is not included, as it is not available via PLACES, and special permission is required for access.
-The health outcomes data is expressed as a frequency.
-```
+Create a dataset of several important health outcomes. Of note, mortality data is not included, as it is not available via PLACES, and special permission is required for access. The health outcomes data are expressed as frequencies.
 
 ```{r}
 # Filter to include only the obesity data
@@ -714,7 +745,11 @@ merged_outcomes = data_places_obesity |>
   left_join(data_places_heart, by = "GEOID") |>
   left_join(data_places_disability, by = "GEOID") |>
   left_join(data_places_healthrating, by = "GEOID")
+```
 
+First we check how many tracts are included in our dataset with both demographic and health outcomes data.
+
+```{r}
 ## We check if there are values in the demographic data that are not within the health outcomes data, or vice versa.
 length(setdiff(merged_data$GEOID, merged_outcomes$GEOID)) #There are 38 rows in the demographic data that are not in the health outcomes data.
 
@@ -723,13 +758,6 @@ setdiff(merged_data$GEOID, merged_outcomes$GEOID)
 merged_data %>% filter(GEOID == 42101036901) #an example of one we checked
 # They seem to be empty aside from the GEOID in the demographic dataset. It seems that for whatever reason, this tract does not have any demographic data and it is okay to remove them from the analyses, and use only those with demographic and outcomes data.
 
-```
-
-``` t
-First we check how many tracts are included in our dataset with both demographic and health outcomes data.
-```
-
-```{r}
 # Number of tracts with demographic data
 num_tracts_demographic <- merged_data |> distinct(GEOID) |> nrow()
 
@@ -749,9 +777,7 @@ summary_table <- data.frame(
 kable(summary_table, caption = "Summary of Tracts with Data", align = c("l", "r"), digits = 0)
 ```
 
-``` t
 Next we check our data missingness.
-```
 
 ```{r}
 # List of demographic variables
@@ -787,13 +813,13 @@ missingness_table_demographics <- data.frame(
   })
 )
 
-# Reset row names to avoid duplication issues in kable
+# Reset row names to avoid duplication issues in the final table
 rownames(missingness_table_demographics) <- NULL
 
 # Print the table using kable to make it more presentable
 missingness_table_demographics %>%
   kable(col.names = c("Variable", "Missing Data Count"),
-        caption = "Missing Data Count for Demographic Variables",
+        caption = "Missing Data Count for Demographic Variables (%)",
         align = c("l", "r"),
         format = "markdown")
 
@@ -824,18 +850,14 @@ rownames(missingness_table_outcomes) <- NULL
 # Print the table using kable to make it more presentable
 missingness_table_outcomes %>%
   kable(col.names = c("Variable", "Missing Data Count"),
-        caption = "Missing Data Count for Health Outcomes Variables",
+        caption = "Missing Data Count for Health Outcomes Variables (%)",
         align = c("l", "r"),
         format = "markdown")
 ```
 
 ## Results {#sec-results}
 
-Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
-
-``` t
 First we observe basic summary statistics for the demographic variables of interest, as well as the five health outcomes we will be examining: obesity, stroke, coronary heart disease, disability, and self-rated health.
-```
 
 ```{r}
 # Create a summary table for the demographic variables
@@ -883,9 +905,7 @@ summary_table_outcomes
 
 ```
 
-``` t
-Next we examine the distributions of the health outcomes data.
-```
+Next we examine the distributions of the health outcomes data, using both bar graphs and chloropleth maps to see the distrbutions across the state of Pennsylvania.
 
 ```{r}
 # Disability
@@ -933,9 +953,7 @@ grid.arrange(plot_disability, plot_healthrating, plot_heart, plot_obesity, plot_
 
 ```
 
-``` t
-Next we create choropleth maps.
-```
+Chloropleth maps:
 
 ```{r}
 # We start by creating a base map of Pennsylvania.
@@ -948,9 +966,7 @@ ggplot(data = st_simplify(pa.tracts, dTolerance = 1e3)) +
   ggtitle("Pennsylvania Tracts")
 ```
 
-``` t
 Next we create chloropleth maps for each of the health ourcomes variables. These maps help us visualize the distribution of the health outcomes data across Pennsylvania tracts.
-```
 
 ```{r}
 merged_data_outcomes <- pa.tracts %>%
@@ -1003,9 +1019,7 @@ ggplot(data = merged_data_outcomes) +
 
 ```
 
-``` t
-Perform factor analysis.
-```
+We perform factor analysis to reconstruct the ADI for 2020 Pennsylvania.
 
 ```{r}
 # We have to omit NA values before performing factor analysis
@@ -1022,9 +1036,9 @@ fa_result$loadings
 factor_scores <- factor.scores(merged_data_subset_clean[,2:18], fa_result) #Each row corresponds to a geographic tract, and each column corresponds to a factor score, based on the factors extracted in the factor analysis.
 ```
 
-``` t
+We can compare our factor scores to those in Singh's paper (see @sec-methods). In general the characteristics do seem to have similar factor scores in similar directions, but of lower magnitude than in Singh's paper.
+
 We use the factor loadings to compute the ADI for each tract.
-```
 
 ```{r}
 adi_scores <- factor_scores$scores[, 1]  # Take the first factor score as the ADI score
@@ -1033,9 +1047,7 @@ adi_scores <- factor_scores$scores[, 1]  # Take the first factor score as the AD
 merged_data_subset_clean$ADI <- adi_scores
 ```
 
-``` t
 Plot a map of the ADI in Pennsylvania tracts.
-```
 
 ```{r}
 merged_data_subset_clean_map <- pa.tracts |>
@@ -1050,9 +1062,7 @@ ggplot(data = merged_data_subset_clean_map) +
   theme(legend.position = "bottom")
 ```
 
-``` t
 We test whether the ADI is associated with health outcomes.
-```
 
 ```{r}
 # Combine predictor and outcomes data.
@@ -1089,9 +1099,9 @@ plot_stroke = merged_data_all |>
 grid.arrange(plot_disability, plot_healthrating, plot_heart, plot_obesity, plot_stroke, ncol = 2)
 ```
 
-``` t
-There do seem to be associations, so we quantify them using the Pearson correlation.
-```
+There do seem to be linear associations, although the association between ADI and self-reported health seems a little less linear than the others, and the association between ADI and coronary heart disease seems weaker than for the other variables.
+
+We therefore quantify the associations using the Pearson correlation.
 
 ```{r}
 # Calculate correlations
@@ -1113,11 +1123,39 @@ cor_results
 
 ## Conclusion
 
-This the conclusion. The @sec-results can be invoked here.
+In this project, we analyzed the 17 characteristics that Singh used to create the ADI. Whereas he used data from across the United States of America between the years 1969 and 1998, we used data from Pennsylvania 2016-2020. In this way we analyzed whether the 17 characteristics he used are still useful in our population. The factor scores are similar but of lower magnitude, and the ADI we devised is correlated with health outcomes including rates of disability, coronary heart disease, obesity, stroke, and self-reported health.
+
+It seems that the ADI devised by Singh remains useful in our population; however, it is important to use updated data for our patient population, as our factor scores using 2020 Pennsylvania data differ from Singh's factor scores. Furthermore, the weaker factor score magnitudes indicate that these might not be the best characteristics, of all those available, to include in an ADI. There are many additional characteristics that can be considered for inclusion, either as an addition or replacement; some are included in the Supplements section.
+
+There are many potential future directions for this research.
+
+-   To compare the associations between Singh's ADI and our ADI with health outcomes measures
+
+-   To test the association between our ADI and mortality, and other important health outcomes measures
+
+-   To investigate other sociodemographic characteristics that may be useful in an ADI, and consider whether these should be in addition to or instead of some of the characteristics currently in the ADI
+
+-   To re-examine Singh's ADI using 2020 data for the entire country, and state-by-state, and test whether the measuresments do differ significantly by state; in this way, we can decide whether there should be different ADIs for each state or whether it is sufficient to have one country-wide
+
+Overall, our ADI is a useful measure for health disparities research in Pennsylvania in the 2020s.
+
+## References
+
+``` t
+Centers for Disease Control and Prevention. (2024). PLACES: Local Data for Better Health, Census Tract Data 2024 release mortality. U.S. Department of Health & Human Services. https://data.cdc.gov/500-Cities-Places/PLACES-Local-Data-for-Better-Health-Census-Tract-D/cwsq-ngmh/data_preview. Accessed November 21, 2024.
+
+Kind AJ, Jencks S, Brock J, Yu M, Bartels C, Ehlenbach W, Greenberg C, Smith M. Neighborhood socioeconomic disadvantage and 30-day rehospitalization: a retrospective cohort study. Ann Intern Med. 2014 Dec 2;161(11):765-74. doi: 10.7326/M13-2946. PMID: 25437404; PMCID: PMC4251560.
+
+Singh GK. Area deprivation and widening inequalities in US mortality, 1969-1998. Am J Public Health. 2003 Jul;93(7):1137-43. doi: 10.2105/ajph.93.7.1137. PMID: 12835199; PMCID: PMC1447923.
+
+Singh GK, Siahpush M. Increasing inequalities in all-cause and cardiovascular mortality among US adults aged 25-64 years by area socioeconomic status, 1969-1998. Int J Epidemiol. 2002 Jun;31(3):600-13. doi: 10.1093/ije/31.3.600. PMID: 12055162.
+```
+
+## Supplement
+
+These are some additional variables that may be of interest to study and potentially incorporate in future ADIs.
 
 ```{r}
-# Other variables that may be of interest to study and potentially incorporate
-
 ## race
 vars_dhc_race = c(
         #all = "P3_001N",
@@ -1311,62 +1349,4 @@ data_acs_income_combined <- data_acs_income %>%
     .groups = 'drop'
   )
 rm(vars_acs_income)
-```
-
-```{r}
-### WHY DOES THIS NOT WORK?
-
-# Define the URL of the Excel file
-url_places <- "https://data.cdc.gov/download/PLACES-Local-Data-for-Better-Health-Census-Tract-D/excel/PLACES-Local-Data-for-Better-Health-Census-Tract-D.xlsx"
-#url_places <- "https://data.cdc.gov/500-Cities-Places/PLACES-Local-Data-for-Better-Health-Census-Tract-D/cwsq-ngmh/about_data"
-
-# Define a temporary file path
-temp_file <- tempfile(fileext = ".xlsx")
-
-# Download the Excel file
-download.file(url_places, temp_file, mode = "wb")
-
-# Read the Excel file
-data_places <- read_excel(temp_file)
-
-# View the first few rows of the data
-print(head(data_places))
-```
-
-## References
-
-``` t
-Centers for Disease Control and Prevention. (2024). PLACES: Local Data for Better Health, Census Tract Data 2024 release mortality. U.S. Department of Health & Human Services. https://data.cdc.gov/500-Cities-Places/PLACES-Local-Data-for-Better-Health-Census-Tract-D/cwsq-ngmh/data_preview. Accessed November 21, 2024.
-
-Kind AJ, Jencks S, Brock J, Yu M, Bartels C, Ehlenbach W, Greenberg C, Smith M. Neighborhood socioeconomic disadvantage and 30-day rehospitalization: a retrospective cohort study. Ann Intern Med. 2014 Dec 2;161(11):765-74. doi: 10.7326/M13-2946. PMID: 25437404; PMCID: PMC4251560.
-
-Singh GK. Area deprivation and widening inequalities in US mortality, 1969-1998. Am J Public Health. 2003 Jul;93(7):1137-43. doi: 10.2105/ajph.93.7.1137. PMID: 12835199; PMCID: PMC1447923.
-
-Singh GK, Siahpush M. Increasing inequalities in all-cause and cardiovascular mortality among US adults aged 25-64 years by area socioeconomic status, 1969-1998. Int J Epidemiol. 2002 Jun;31(3):600-13. doi: 10.1093/ije/31.3.600. PMID: 12055162.
-```
-
-## Supplement
-
-These are some additional calculations and graphics that were used in the data preparation and cleaning.
-
-``` t
-Perform Principal Component Analysis (PCA).
-```
-
-```{r}
-# Perform PCA
-merged.pca <- prcomp(merged_data_subset_clean, scale = TRUE)
-print(merged.pca) #Displays std deviations of PCs and their loadings (i.e. coefficients)
-
-# Check proportion of variance explained by PCs
-summary(merged.pca)
-
-# Create a screeplot
-ggscreeplot(merged.pca)
-```
-
-``` t
-TO DO:
-- change from PA-specific to include entire US, in line with ADI
-- and/or can do both, and see if ADI calculations differ by state using a few
 ```
