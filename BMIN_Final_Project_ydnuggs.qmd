@@ -29,6 +29,7 @@ Describe the data used and general methodological approach used to address the p
 ```{r}
 # Load necessary packages
 library(tidyverse)
+library(gtsummary)
 library(sf)
 library(tidycensus)
 library(ggspatial)
@@ -775,10 +776,10 @@ vars_demographic <- c(
 )
 
 # Subset the dataframe to include only the columns you're interested in
-merged_data_subset <- merged_data[, vars_of_interest]
+merged_data_subset <- merged_data[, vars_demographic]
 
 # Calculate the missingness for each variable
-missingness_table <- data.frame(
+missingness_table_demographics <- data.frame(
   Variable = colnames(merged_data_subset),  # List of variables
   Missingness = sapply(colnames(merged_data_subset), function(var) {
     # Calculate the percentage of missing values for each variable
@@ -787,10 +788,10 @@ missingness_table <- data.frame(
 )
 
 # Reset row names to avoid duplication issues in kable
-rownames(missingness_table) <- NULL
+rownames(missingness_table_demographics) <- NULL
 
 # Print the table using kable to make it more presentable
-missingness_table %>%
+missingness_table_demographics %>%
   kable(col.names = c("Variable", "Missing Data Count"),
         caption = "Missing Data Count for Demographic Variables",
         align = c("l", "r"),
@@ -806,27 +807,26 @@ vars_outcomes <- c(
 )
 
 # Subset the dataframe to include only the columns you're interested in
-merged_data_subset <- merged_outcomes[, vars_outcomes]
+merged_outcomes_subset <- merged_outcomes[, vars_outcomes]
 
 # Calculate the missingness for each variable
-missingness_table <- data.frame(
-  Variable = colnames(merged_data_subset),  # List of variables
-  Missingness = sapply(colnames(merged_data_subset), function(var) {
+missingness_table_outcomes <- data.frame(
+  Variable = colnames(merged_outcomes_subset),  # List of variables
+  Missingness = sapply(colnames(merged_outcomes_subset), function(var) {
     # Calculate the percentage of missing values for each variable
-    mean(is.na(merged_data_subset[[var]]), na.rm = TRUE) * 100
+    mean(is.na(merged_outcomes_subset[[var]]), na.rm = TRUE) * 100
   })
 )
 
 # Reset row names to avoid duplication issues in kable
-rownames(missingness_table) <- NULL
+rownames(missingness_table_outcomes) <- NULL
 
 # Print the table using kable to make it more presentable
-missingness_table %>%
+missingness_table_outcomes %>%
   kable(col.names = c("Variable", "Missing Data Count"),
         caption = "Missing Data Count for Health Outcomes Variables",
         align = c("l", "r"),
         format = "markdown")
-
 ```
 
 ## Results {#sec-results}
@@ -834,7 +834,57 @@ missingness_table %>%
 Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
 
 ``` t
-First, we examine the distributions of the health outcomes data.
+First we observe basic summary statistics for the demographic variables of interest, as well as the five health outcomes we will be examining: obesity, stroke, coronary heart disease, disability, and self-rated health.
+```
+
+```{r}
+# Create a summary table for the demographic variables
+summary_table_demographics <- merged_data_subset %>%
+  summarise(across(everything(), 
+                   list(mean = ~mean(. , na.rm = TRUE), 
+                        sd = ~sd(. , na.rm = TRUE), 
+                        missing = ~sum(is.na(.))),
+                   .names = "{.col}_{.fn}")) %>%
+  pivot_longer(cols = everything(), 
+               names_to = c("Characteristic", "Statistic"),
+               names_pattern = "(.*)_(.*)") %>%
+  pivot_wider(names_from = Statistic, values_from = value) %>%
+  mutate(
+    # Round mean and sd to 2 decimal places
+    `Average (Standard Deviation), N=3446` = paste0(round(mean, 2), " (", round(sd, 2), ")"),
+    Missingness = missing
+  ) %>%
+  select(Characteristic, `Average (Standard Deviation), N=3446`, Missingness)
+
+# View the summary table
+summary_table_demographics
+
+
+# Create a summary table for the outcomes variables
+summary_table_outcomes <- merged_outcomes_subset %>%
+  summarise(across(everything(), 
+                   list(mean = ~mean(. , na.rm = TRUE), 
+                        sd = ~sd(. , na.rm = TRUE), 
+                        missing = ~sum(is.na(.))),
+                   .names = "{.col}_{.fn}")) %>%
+  pivot_longer(cols = everything(), 
+               names_to = c("Characteristic", "Statistic"),
+               names_pattern = "(.*)_(.*)") %>%
+  pivot_wider(names_from = Statistic, values_from = value) %>%
+  mutate(
+    # Round mean and sd to 2 decimal places
+    `Average (Standard Deviation), N=3446` = paste0(round(mean, 2), " (", round(sd, 2), ")"),
+    Missingness = missing
+  ) %>%
+  select(Characteristic, `Average (Standard Deviation), N=3446`, Missingness)
+
+# View the summary table
+summary_table_outcomes
+
+```
+
+``` t
+Next we examine the distributions of the health outcomes data.
 ```
 
 ```{r}
@@ -898,73 +948,59 @@ ggplot(data = st_simplify(pa.tracts, dTolerance = 1e3)) +
   ggtitle("Pennsylvania Tracts")
 ```
 
+``` t
+Next we create chloropleth maps for each of the health ourcomes variables. These maps help us visualize the distribution of the health outcomes data across Pennsylvania tracts.
+```
+
 ```{r}
 merged_data_outcomes <- pa.tracts %>%
   inner_join(merged_outcomes, by = c("GEOID" = "GEOID"))
 
-# Create choropleth maps
-plot_obesity = ggplot(data = merged_data_outcomes) +
+# Obesity
+ggplot(data = merged_data_outcomes) +
   geom_sf(aes(fill = Rate_Obesity), color = "white", size = 0.2) + 
   scale_fill_viridis_c(option = "C") +  # You can change this to a different color scale
-  labs(title = "Obesity Percentage by Census Tract",
+  labs(title = "Obesity Rate by Census Tract",
        fill = "Obesity %") +
   theme_minimal() +
   theme(legend.position = "bottom")
 
-plot_stroke = ggplot(data = merged_data_outcomes) +
+# Stroke
+ggplot(data = merged_data_outcomes) +
   geom_sf(aes(fill = Rate_Stroke), color = "white", size = 0.2) + 
   scale_fill_viridis_c(option = "C") +
-  labs(title = "Stroke Percentage by Census Tract",
+  labs(title = "Stroke Rate by Census Tract",
        fill = "Stroke %") +
   theme_minimal() +
   theme(legend.position = "bottom")
 
-plot_heart = ggplot(data = merged_data_outcomes) +
+# Coronary Heart Disease
+ggplot(data = merged_data_outcomes) +
   geom_sf(aes(fill = Rate_Heart), color = "white", size = 0.2) + 
   scale_fill_viridis_c(option = "C") +
-  labs(title = "Coronary Heart Disease Percentage by Census Tract",
+  labs(title = "Coronary Heart Disease Rate by Census Tract",
        fill = "Coronary Heart Disease %") +
   theme_minimal() +
   theme(legend.position = "bottom")
 
-plot_disability = ggplot(data = merged_data_outcomes) +
+# Disability
+ggplot(data = merged_data_outcomes) +
   geom_sf(aes(fill = Rate_Disability), color = "white", size = 0.2) + 
   scale_fill_viridis_c(option = "C") +
-  labs(title = "Disability Percentage by Census Tract",
+  labs(title = "Disability Rate by Census Tract",
        fill = "Disability %") +
   theme_minimal() +
   theme(legend.position = "bottom")
 
-plot_healthrating = ggplot(data = merged_data_outcomes) +
+# Self-rated health
+ggplot(data = merged_data_outcomes) +
   geom_sf(aes(fill = Rate_Healthrating), color = "white", size = 0.2) + 
   scale_fill_viridis_c(option = "C") +
-  labs(title = "Health Rating Average by Census Tract",
+  labs(title = "Health Rating Average Rate by Census Tract",
        fill = "Health Rating %") +
   theme_minimal() +
   theme(legend.position = "bottom")
 
-# Combine the plots into one graphic
-grid.arrange(plot_disability, plot_healthrating, plot_heart, plot_obesity, plot_stroke, ncol = 2)
-```
-
-``` t
-Perform Principal Component Analysis (PCA).
-```
-
-```{r}
-# We have to omit NA values before performing PCA.
-merged_data_clean <- na.omit(merged_data)
-merged_data_clean = merged_data_clean[ , 2:18]
-
-# Perform PCA
-merged.pca <- prcomp(merged_data_clean, scale = TRUE)
-print(merged.pca) #Displays std deviations of PCs and their loadings (i.e. coefficients)
-
-# Check proportion of variance explained by PCs
-summary(merged.pca)
-
-# Create a screeplot
-ggscreeplot(merged.pca)
 ```
 
 ``` t
@@ -972,11 +1008,107 @@ Perform factor analysis.
 ```
 
 ```{r}
-# Perform factor analysis (e.g., 2-factor solution)
-fa_result <- fa(merged_data_clean, nfactors = 2, rotate = "varimax")
+# We have to omit NA values before performing factor analysis
+merged_data_subset = merged_data[, c("GEOID",vars_demographic)] #include GEOID for now
+merged_data_subset_clean <- na.omit(merged_data_subset) #remove NAs
+
+# Perform factor analysis (1-factor solution)
+fa_result <- fa(merged_data_subset_clean[,2:18], nfactors = 1, rotate = "varimax")
 
 # Check the factor loadings
 fa_result$loadings
+
+# Calculate factor scores for each geographic tract based on the factor analysis
+factor_scores <- factor.scores(merged_data_subset_clean[,2:18], fa_result) #Each row corresponds to a geographic tract, and each column corresponds to a factor score, based on the factors extracted in the factor analysis.
+```
+
+``` t
+We use the factor loadings to compute the ADI for each tract.
+```
+
+```{r}
+adi_scores <- factor_scores$scores[, 1]  # Take the first factor score as the ADI score
+
+# Add the ADI score to the dataset
+merged_data_subset_clean$ADI <- adi_scores
+```
+
+``` t
+Plot a map of the ADI in Pennsylvania tracts.
+```
+
+```{r}
+merged_data_subset_clean_map <- pa.tracts |>
+  inner_join(merged_data_subset_clean, by = "GEOID")
+
+ggplot(data = merged_data_subset_clean_map) +
+  geom_sf(aes(fill = ADI), color = "white", size = 0.2) + 
+  scale_fill_viridis_c(option = "C") +
+  labs(title = "Area Deprivation Index by Census Tract",
+       fill = "ADI") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+``` t
+We test whether the ADI is associated with health outcomes.
+```
+
+```{r}
+# Combine predictor and outcomes data.
+merged_data_all = merged_data_subset_clean |>
+  inner_join(merged_outcomes, by = "GEOID")
+
+# Scatter plots
+plot_disability = merged_data_all |> 
+  ggplot(aes(x = ADI, y = Rate_Disability)) +
+  geom_point(color = "darkseagreen3") +
+  theme_bw()
+
+plot_healthrating = merged_data_all |> 
+  ggplot(aes(x = ADI, y = Rate_Healthrating)) +
+  geom_point(color = "darkseagreen3") +
+  theme_bw()
+
+plot_heart = merged_data_all |> 
+  ggplot(aes(x = ADI, y = Rate_Heart)) +
+  geom_point(color = "darkseagreen3") +
+  theme_bw()
+
+plot_obesity = merged_data_all |> 
+  ggplot(aes(x = ADI, y = Rate_Obesity)) +
+  geom_point(color = "darkseagreen3") +
+  theme_bw()
+
+plot_stroke = merged_data_all |> 
+  ggplot(aes(x = ADI, y = Rate_Stroke)) +
+  geom_point(color = "darkseagreen3") +
+  theme_bw()
+
+# Combine the plots into one graphic
+grid.arrange(plot_disability, plot_healthrating, plot_heart, plot_obesity, plot_stroke, ncol = 2)
+```
+
+``` t
+There do seem to be associations, so we quantify them using the Pearson correlation.
+```
+
+```{r}
+# Calculate correlations
+cor_results <- tibble(
+  Outcome = c("Rate_Disability", "Rate_Healthrating", "Rate_Heart", "Rate_Obesity", "Rate_Stroke"),
+  Correlation = c(
+    cor(merged_data_all$ADI, merged_data_all$Rate_Disability, use = "complete.obs"),
+    cor(merged_data_all$ADI, merged_data_all$Rate_Healthrating, use = "complete.obs"),
+    cor(merged_data_all$ADI, merged_data_all$Rate_Heart, use = "complete.obs"),
+    cor(merged_data_all$ADI, merged_data_all$Rate_Obesity, use = "complete.obs"),
+    cor(merged_data_all$ADI, merged_data_all$Rate_Stroke, use = "complete.obs")
+  )
+)
+
+# View the results
+cor_results
+
 ```
 
 ## Conclusion
@@ -1215,37 +1347,22 @@ Singh GK, Siahpush M. Increasing inequalities in all-cause and cardiovascular mo
 
 ## Supplement
 
-These are some additional calculations and graphicst that were used in the data preparation and cleaning.
+These are some additional calculations and graphics that were used in the data preparation and cleaning.
 
 ``` t
-This is summary information for the variables of interest.
+Perform Principal Component Analysis (PCA).
 ```
 
 ```{r}
-# Summary information for the variables of interest
-data_acs_less_highschool |> select(var_freq_lesshighschool) |> tbl_summary()
-data_acs_associates_college |> select(var_freq_associates_college) |> tbl_summary()
-data_acs_incomplete_plumbing |> select(var_freq_incomplete_plumbing) |> tbl_summary()
-data_acs_no_telephone |> select(var_freq_no_telephone) |> tbl_summary()
-data_acs_novehicle |> select(var_freq_novehicle) |> tbl_summary()
-data_acs_overcrowding |> select(var_freq_overcrowding) |> tbl_summary()
-data_acs_poverty_level |> select(var_freq_poverty_level) |> tbl_summary()
-data_acs_poverty_level_150 |> select(var_freq_poverty_level_150) |> tbl_summary()
-data_acs_unemployment |> select(var_freq_unemployment) |> tbl_summary()
-data_acs_whitecollar |> select(var_freq_whitecollar) |> tbl_summary()
-data_dhc_homeownership |> select(var_freq_homeownership) |> tbl_summary()
-data_dhc_singleparent |> select(var_freq_singleparent) |> tbl_summary()
-data_acs_median_income |> select(var_median_income) |> tbl_summary()
-data_acs_median_rent |> select(var_median_rent) |> tbl_summary()
-data_acs_gini |> select(var_gini) |> tbl_summary()
-data_acs_home_value |> select(var_home_value) |> tbl_summary()
-data_acs_housing_costs |> select(var_housing_costs) |> tbl_summary()
+# Perform PCA
+merged.pca <- prcomp(merged_data_subset_clean, scale = TRUE)
+print(merged.pca) #Displays std deviations of PCs and their loadings (i.e. coefficients)
 
-data_places_obesity |> select(Data_Value) |> tbl_summary()
-data_places_stroke |> select(Data_Value) |> tbl_summary()
-data_places_heart |> select(Data_Value) |> tbl_summary()
-data_places_disability |> select(Data_Value) |> tbl_summary()
-data_places_healthrating |> select(Data_Value) |> tbl_summary()
+# Check proportion of variance explained by PCs
+summary(merged.pca)
+
+# Create a screeplot
+ggscreeplot(merged.pca)
 ```
 
 ``` t
