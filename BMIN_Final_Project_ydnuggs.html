@@ -3491,6 +3491,7 @@ To use now, restart R or run `readRenviron(&quot;~/.Renviron&quot;)`</code></pre
 <pre><code>[1] &quot;8d4ae400e665d714446a25ed86d77a9125c57ec6&quot;</code></pre>
 </div>
 </div>
+<p><em>Preparing the data: predictors, i.e. sociodemographic variables</em></p>
 <p>These are the factors from Singh’s seminal paper, and their corresponding factor score coefficients, that we seek to replicate in 2020 Pennsylvania (as listed in PMID 12835199).</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create the data frame with the characteristics and corresponding factor score coefficients</span></span>
@@ -4695,6 +4696,7 @@ var_freq_singleparent</code></pre>
 <span id="cb186-19"><a href="#cb186-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">.names =</span> <span class="st">&quot;{.col}_log&quot;</span></span>
 <span id="cb186-20"><a href="#cb186-20" aria-hidden="true" tabindex="-1"></a>  ))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
+<p><em>Preparing the data: health outcomes</em></p>
 <p>Import CDC PLACES data, which contains health outcomes data.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb187"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb187-1"><a href="#cb187-1" aria-hidden="true" tabindex="-1"></a><span class="co"># The data is taken from the following URL. Unfortunately the code to import the data is not working properly, so we downloaded it as a CSV file and here import the file.</span></span>
@@ -4742,6 +4744,7 @@ lgl  (2): Data_Value_Footnote_Symbol, Data_Value_Footnote
 <span id="cb190-19"><a href="#cb190-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(data_places_disability, <span class="at">by =</span> <span class="st">&quot;GEOID&quot;</span>) <span class="sc">|&gt;</span></span>
 <span id="cb190-20"><a href="#cb190-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(data_places_healthrating, <span class="at">by =</span> <span class="st">&quot;GEOID&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
+<p><em>Preparing the data: merging the predictor and outcomes datasets</em></p>
 <p>First we check how many tracts are included in our dataset with both demographic and health outcomes data.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb191"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb191-1"><a href="#cb191-1" aria-hidden="true" tabindex="-1"></a><span class="do">## We check if there are values in the demographic data that are not within the health outcomes data, or vice versa.</span></span>
@@ -4864,17 +4867,17 @@ lgl  (2): Data_Value_Footnote_Symbol, Data_Value_Footnote
 <span id="cb198-36"><a href="#cb198-36" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb198-37"><a href="#cb198-37" aria-hidden="true" tabindex="-1"></a><span class="co"># Print the table using kable to make it more presentable</span></span>
 <span id="cb198-38"><a href="#cb198-38" aria-hidden="true" tabindex="-1"></a>missingness_table_demographics <span class="sc">%&gt;%</span></span>
-<span id="cb198-39"><a href="#cb198-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">&quot;Variable&quot;</span>, <span class="st">&quot;Missing Data Count&quot;</span>),</span>
-<span id="cb198-40"><a href="#cb198-40" aria-hidden="true" tabindex="-1"></a>        <span class="at">caption =</span> <span class="st">&quot;Missing Data Count for Demographic Variables (%)&quot;</span>,</span>
+<span id="cb198-39"><a href="#cb198-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">&quot;Variable&quot;</span>, <span class="st">&quot;Missing Data&quot;</span>),</span>
+<span id="cb198-40"><a href="#cb198-40" aria-hidden="true" tabindex="-1"></a>        <span class="at">caption =</span> <span class="st">&quot;Missing Data for Demographic Variables (%)&quot;</span>,</span>
 <span id="cb198-41"><a href="#cb198-41" aria-hidden="true" tabindex="-1"></a>        <span class="at">align =</span> <span class="fu">c</span>(<span class="st">&quot;l&quot;</span>, <span class="st">&quot;r&quot;</span>),</span>
 <span id="cb198-42"><a href="#cb198-42" aria-hidden="true" tabindex="-1"></a>        <span class="at">format =</span> <span class="st">&quot;markdown&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Missing Data Count for Demographic Variables (%)</caption>
+<caption>Missing Data for Demographic Variables (%)</caption>
 <thead>
 <tr class="header">
 <th style="text-align: left;">Variable</th>
-<th style="text-align: right;">Missing Data Count</th>
+<th style="text-align: right;">Missing Data</th>
 </tr>
 </thead>
 <tbody>
@@ -4975,17 +4978,17 @@ lgl  (2): Data_Value_Footnote_Symbol, Data_Value_Footnote
 <span id="cb199-24"><a href="#cb199-24" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb199-25"><a href="#cb199-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Print the table using kable to make it more presentable</span></span>
 <span id="cb199-26"><a href="#cb199-26" aria-hidden="true" tabindex="-1"></a>missingness_table_outcomes <span class="sc">%&gt;%</span></span>
-<span id="cb199-27"><a href="#cb199-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">&quot;Variable&quot;</span>, <span class="st">&quot;Missing Data Count&quot;</span>),</span>
-<span id="cb199-28"><a href="#cb199-28" aria-hidden="true" tabindex="-1"></a>        <span class="at">caption =</span> <span class="st">&quot;Missing Data Count for Health Outcomes Variables (%)&quot;</span>,</span>
+<span id="cb199-27"><a href="#cb199-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">&quot;Variable&quot;</span>, <span class="st">&quot;Missing Data&quot;</span>),</span>
+<span id="cb199-28"><a href="#cb199-28" aria-hidden="true" tabindex="-1"></a>        <span class="at">caption =</span> <span class="st">&quot;Missing Data for Health Outcomes Variables (%)&quot;</span>,</span>
 <span id="cb199-29"><a href="#cb199-29" aria-hidden="true" tabindex="-1"></a>        <span class="at">align =</span> <span class="fu">c</span>(<span class="st">&quot;l&quot;</span>, <span class="st">&quot;r&quot;</span>),</span>
 <span id="cb199-30"><a href="#cb199-30" aria-hidden="true" tabindex="-1"></a>        <span class="at">format =</span> <span class="st">&quot;markdown&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Missing Data Count for Health Outcomes Variables (%)</caption>
+<caption>Missing Data for Health Outcomes Variables (%)</caption>
 <thead>
 <tr class="header">
 <th style="text-align: left;">Variable</th>
-<th style="text-align: right;">Missing Data Count</th>
+<th style="text-align: right;">Missing Data</th>
 </tr>
 </thead>
 <tbody>
@@ -5164,7 +5167,7 @@ lgl  (2): Data_Value_Footnote_Symbol, Data_Value_Footnote
 </div>
 </div>
 </div>
-<p>Next we create chloropleth maps for each of the health ourcomes variables. These maps help us visualize the distribution of the health outcomes data across Pennsylvania tracts.</p>
+<p>Next we create chloropleth maps for each of the health outcomes variables. These maps help us visualize the distribution of the health outcomes data across Pennsylvania tracts.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb208"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb208-1"><a href="#cb208-1" aria-hidden="true" tabindex="-1"></a>merged_data_outcomes <span class="ot">&lt;-</span> pa.tracts <span class="sc">%&gt;%</span></span>
 <span id="cb208-2"><a href="#cb208-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(merged_outcomes, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;GEOID&quot;</span> <span class="ot">=</span> <span class="st">&quot;GEOID&quot;</span>))</span>

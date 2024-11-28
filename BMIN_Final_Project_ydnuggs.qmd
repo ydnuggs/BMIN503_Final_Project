@@ -53,6 +53,8 @@ options(progress_enabled = FALSE)
 census_api_key("8d4ae400e665d714446a25ed86d77a9125c57ec6", install = TRUE, overwrite = TRUE)
 ```
 
+*Preparing the data: predictors, i.e. sociodemographic variables*
+
 These are the factors from Singh's seminal paper, and their corresponding factor score coefficients, that we seek to replicate in 2020 Pennsylvania (as listed in PMID 12835199).
 
 ```{r Singh_factors}
@@ -706,6 +708,8 @@ merged_data <- merged_data %>%
   ))
 ```
 
+*Preparing the data: health outcomes*
+
 Import CDC PLACES data, which contains health outcomes data.
 
 ```{r}
@@ -746,6 +750,8 @@ merged_outcomes = data_places_obesity |>
   left_join(data_places_disability, by = "GEOID") |>
   left_join(data_places_healthrating, by = "GEOID")
 ```
+
+*Preparing the data: merging the predictor and outcomes datasets*
 
 First we check how many tracts are included in our dataset with both demographic and health outcomes data.
 
@@ -818,8 +824,8 @@ rownames(missingness_table_demographics) <- NULL
 
 # Print the table using kable to make it more presentable
 missingness_table_demographics %>%
-  kable(col.names = c("Variable", "Missing Data Count"),
-        caption = "Missing Data Count for Demographic Variables (%)",
+  kable(col.names = c("Variable", "Missing Data"),
+        caption = "Missing Data for Demographic Variables (%)",
         align = c("l", "r"),
         format = "markdown")
 
@@ -849,8 +855,8 @@ rownames(missingness_table_outcomes) <- NULL
 
 # Print the table using kable to make it more presentable
 missingness_table_outcomes %>%
-  kable(col.names = c("Variable", "Missing Data Count"),
-        caption = "Missing Data Count for Health Outcomes Variables (%)",
+  kable(col.names = c("Variable", "Missing Data"),
+        caption = "Missing Data for Health Outcomes Variables (%)",
         align = c("l", "r"),
         format = "markdown")
 ```
@@ -966,7 +972,7 @@ ggplot(data = st_simplify(pa.tracts, dTolerance = 1e3)) +
   ggtitle("Pennsylvania Tracts")
 ```
 
-Next we create chloropleth maps for each of the health ourcomes variables. These maps help us visualize the distribution of the health outcomes data across Pennsylvania tracts.
+Next we create chloropleth maps for each of the health outcomes variables. These maps help us visualize the distribution of the health outcomes data across Pennsylvania tracts.
 
 ```{r}
 merged_data_outcomes <- pa.tracts %>%
