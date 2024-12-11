@@ -1,5 +1,5 @@
 ---
-title: "Area Deprivation Index for 2020"
+title: "Area Deprivation Index for Pennsylvania 2020"
 subtitle: "BMIN503/EPID600 Final Project"
 author: "Dana Neugut"
 format: html
@@ -18,15 +18,19 @@ I met with Drs. Amanda Muir and Lindsey Albenberg to gain insight on which censu
 
 ## Introduction {#sec-introduction}
 
-In 2002, Gopal Singh published the Area Deprivation Index (ADI), a “composite area-based deprivation index for the United States” based on census data from 1969 and 1998. It has become a tool used to examine, on an area-based scale, how social determinants of health can have an impact on health outcomes. The Area Deprivation Index uses factor score coefficients based on census data. However, neighborhoods and their sociodemographic characteristics can change over time; therefore, it is important to re-examine these calculations intermittently. Furthermore, associations can differ by states, where there are different laws and demographic factors affecting access to resources. In this project, we use recent data from the 2020 U.S. decennial census and the 2016-2020 5-year American Community Survey (ACS) to reconstruct the ADI for Pennsylvania and re-calculate the factor score coefficients. We then test whether the ADI is associated with several health outcomes, using tract level data.
+In 2002, Gopal Singh published the Area Deprivation Index (ADI), a “composite area-based deprivation index for the United States” based on census data from 1969 to 1998. It has become a tool used to examine, on an area-based scale, how social determinants of health can have an impact on health outcomes. The Area Deprivation Index uses factor score coefficients based on census data. However, neighborhoods and their sociodemographic characteristics can change over time; therefore, it is important to re-examine these calculations intermittently. Furthermore, associations can differ by states, where there are different laws and demographic factors affecting access to resources. In this project, we use recent data from the 2020 U.S. decennial census and the 2016-2020 5-year American Community Survey (ACS) to reconstruct the ADI for Pennsylvania and re-calculate the factor score coefficients. We then test whether the ADI is associated with several health outcomes, using tract level data.
 
-The ADI is useful for health disparities research, which is an important area in all fields of research. There are several other indices that measure socioeconomic status (SES) in some way; these include the Townsend Deprivation Index, Social Disadvantage Index, and others. The ADI is one of the oldest validated indices for SES, and therefore it is the one we use in this paper. Future research can include doing similar analyses for other commonly used SES indices.
+The ADI is useful for health disparities research, which is an important area in all fields of research. There are several other indices that measure socioeconomic status (SES) in some way; these include the Townsend Deprivation Index, Social Disadvantage Index, and others. The ADI is one of the oldest validated indices for SES, and therefore it is the one we use in this paper.
 
 ## Methods {#sec-methods}
 
-In order to calculate the ADI for Pennsylvania in 2020, we first analyze the 17 sociodemographic factors that Singh described in his paper. We import these from the Decennial Census and American Community Survey. We visualize each characteristic and log-transform those without a Normal distribution. We then use factor analysis to calculate the ADI. We import health outcomes data from PLACES. Lastly, we test whether the ADI is associated with health outcomes data.
+In order to calculate the ADI for Pennsylvania in 2020, we first analyze the 17 sociodemographic factors that Singh described in his paper. We import these from the 2020 U.S. Decennial Census Survey and 2016-2020 5-Year American Community Survey. We visualize each characteristic and log-transform those without a Normal distribution. We then use factor analysis to derive factor-score coefficients with which we can calculate the ADI for each tract.
 
-```{r library}
+We import health outcomes data from 2020 CDC PLACES, and use these to test whether the ADI is associated with health outcomes data. We chose five health outcomes to test: obesity because it is associated with many health outcomes; stroke and coronary heart disease because they can lead to significant morbidity and mortality; and disability and self-reported health rating because they can serve as quality of life metrics.
+
+### Loading packages
+
+```{r library, echo=TRUE, warning=FALSE}
 # Load necessary packages
 library(tidyverse)
 library(gtsummary)
@@ -53,7 +57,7 @@ options(progress_enabled = FALSE)
 census_api_key("8d4ae400e665d714446a25ed86d77a9125c57ec6", install = TRUE, overwrite = TRUE)
 ```
 
-*Preparing the data: predictors, i.e. sociodemographic variables*
+### Preparing the data: predictors, i.e. sociodemographic variables
 
 These are the factors from Singh's seminal paper, and their corresponding factor score coefficients, that we seek to replicate in 2020 Pennsylvania (as listed in PMID 12835199).
 
@@ -96,8 +100,6 @@ data_singh |>
   ) |>
   column_spec(1, width = "20em") |>
   column_spec(2, width = "10em")
-
-rm(data_singh)
 ```
 
 We create a dataset with the 2020 Decennial Census variables from the Demographic and Housing Characteristics (DHC) dataset. We do the same for the 2016-2020 ACS 5-year Variables. These datasets can be used to identify the variables of interest based on their decriptions in the files.
@@ -151,7 +153,7 @@ data_acs_education = get_acs(
 )
 
 # Summarize the data
-data_acs_education <- data_acs_education %>%
+data_acs_education <- data_acs_education |>
   mutate(category = case_when(
     variable %in% c("pov_below_m_lesshighschool", "pov_below_f_lesshighschool", "pov_above_m_lesshighschool", "pov_above_f_lesshighschool") ~ "lesshighschool",
     variable %in% c("pov_below_m_highschoolgrad", "pov_below_f_highschoolgrad", "pov_above_m_highschoolgrad", "pov_above_f_highschoolgrad") ~ "highschoolgrad",
@@ -160,8 +162,8 @@ data_acs_education <- data_acs_education %>%
     TRUE ~ NA_character_  # Handle cases that do not fall into these categories
   ))
 
-data_acs_education <- data_acs_education %>%
-  group_by(GEOID, category) %>%
+data_acs_education <- data_acs_education |>
+  group_by(GEOID, category) |>
   summarise(
     estimate = sum(estimate, na.rm = TRUE),
     summary_est = first(summary_est),  # Assuming summary_est is the same for each group
@@ -171,16 +173,16 @@ data_acs_education <- data_acs_education %>%
 rm(vars_acs_education)
 
 
-## Population aged ≥ 25 y who did nto graduate high school
+## Population aged ≥ 25 y who did not graduate high school
 # The earlier studies did <9 years of education
 data_acs_less_highschool <- data_acs_education |> filter(category == "lesshighschool")
-data_acs_less_highschool <- data_acs_less_highschool %>%
+data_acs_less_highschool <- data_acs_less_highschool |>
   rename(var_freq_lesshighschool = var_freq_education)
 
 
 ## Population aged ≥ 25 y with at least an associates degree
 # The earlier studies used at least a high school diploma
-data_acs_associates_college <- data_acs_education %>%
+data_acs_associates_college <- data_acs_education |>
   filter(category %in% c("associates", "collegegrad")) |>
   group_by(GEOID) |>
   summarise(var_freq_associates_college = sum(var_freq_education, na.rm = TRUE))
@@ -204,8 +206,8 @@ data_acs_whitecollar = get_acs(
   year = 2020
 )
 
-data_acs_whitecollar <- data_acs_whitecollar %>%
-  group_by(GEOID) %>%
+data_acs_whitecollar <- data_acs_whitecollar |>
+  group_by(GEOID) |>
   summarise(
     estimate = sum(estimate, na.rm = TRUE),
     summary_est = first(summary_est),  # Assuming summary_est is the same for each group
@@ -312,7 +314,7 @@ data_dhc_homeownership = get_decennial(
   year = 2020,
   sumfile = "dhc"
 )
-data_dhc_homeownership <- data_dhc_homeownership %>%
+data_dhc_homeownership <- data_dhc_homeownership |>
   mutate(var_freq_homeownership = ifelse(summary_value != 0, value / summary_value, NA))
 rm(vars_dhc_homeownership)
 
@@ -330,7 +332,7 @@ data_acs_unemployment = get_acs(
   summary_var = "C18120_002", #creates a column w/'total' variable
   year = 2020
 )
-data_acs_unemployment <- data_acs_unemployment %>%
+data_acs_unemployment <- data_acs_unemployment |>
   mutate(var_freq_unemployment = ifelse(summary_est != 0, estimate / summary_est, NA))
 rm(vars_acs_unemployment)
 
@@ -349,12 +351,12 @@ data_acs_poverty = get_acs(
   summary_var = "B06012_001", #creates a column w/'total' variable
   year = 2020
 )
-data_acs_poverty <- data_acs_poverty %>%
+data_acs_poverty <- data_acs_poverty |>
   mutate(var_freq_poverty = ifelse(summary_est != 0, estimate / summary_est, NA))
 
-data_acs_poverty_level <- data_acs_poverty %>%
+data_acs_poverty_level <- data_acs_poverty |>
   filter(variable %in% "pov_level_below100")
-data_acs_poverty_level <- data_acs_poverty_level %>%
+data_acs_poverty_level <- data_acs_poverty_level |>
   rename(var_freq_poverty_level = var_freq_poverty)
 
 rm(vars_acs_poverty)
@@ -362,14 +364,14 @@ rm(vars_acs_poverty)
 
 ## Population below 150% of the poverty threshold
 # Combine the categories of below 100% of the poverty threshold + 100-149% of the poverty threshold, in order to obtain a composite number of the population below 150% of the poverty threshold
-data_acs_poverty_level_150 <- data_acs_poverty %>%
+data_acs_poverty_level_150 <- data_acs_poverty |>
   mutate(category = case_when(
     variable %in% c("pov_level_below100", "pov_level_100to149") ~ "pov_level_below150",
     TRUE ~ NA_character_  # Handle cases that do not fall into these categories
   ))
 
-data_acs_poverty_level_150 <- data_acs_poverty_level_150 %>%
-  group_by(GEOID, category) %>%
+data_acs_poverty_level_150 <- data_acs_poverty_level_150 |>
+  group_by(GEOID, category) |>
   summarise(
     estimate = sum(estimate, na.rm = TRUE),
     summary_est = first(summary_est),  # Assuming summary_est is the same for each group
@@ -396,14 +398,14 @@ data_dhc_singleparent = get_decennial(
 )
 
 # Summarize the data
-data_dhc_singleparent <- data_dhc_singleparent %>%
+data_dhc_singleparent <- data_dhc_singleparent |>
   mutate(category = case_when(
     variable %in% c("singleparent_m", "singleparent_f") ~ "singleparent",
     TRUE ~ NA_character_  # Handle cases that do not fall into these categories
   ))
 
-data_dhc_singleparent <- data_dhc_singleparent %>%
-  group_by(GEOID, category) %>%
+data_dhc_singleparent <- data_dhc_singleparent |>
+  group_by(GEOID, category) |>
   summarise(
     value = sum(value, na.rm = TRUE),
     summary_value = first(summary_value),  # Assuming summary_est is the same for each group
@@ -426,7 +428,7 @@ data_acs_novehicle = get_acs(
   summary_var = "B08014_001", #creates a column w/'total' variable
   year = 2020
 )
-data_acs_novehicle <- data_acs_novehicle %>%
+data_acs_novehicle <- data_acs_novehicle |>
   mutate(var_freq_novehicle = ifelse(summary_est != 0, estimate / summary_est, NA))
 rm(vars_acs_novehicle)
 
@@ -448,14 +450,14 @@ data_acs_no_telephone = get_acs(
 )
 
 # Summarize the data
-data_acs_no_telephone <- data_acs_no_telephone %>%
+data_acs_no_telephone <- data_acs_no_telephone |>
   mutate(category = case_when(
     variable %in% c("no_telephone_owner", "no_telephone_renter") ~ "no_telephone",
     TRUE ~ NA_character_  # Handle cases that do not fall into these categories
   ))
 
-data_acs_no_telephone <- data_acs_no_telephone %>%
-  group_by(GEOID, category) %>%
+data_acs_no_telephone <- data_acs_no_telephone |>
+  group_by(GEOID, category) |>
   summarise(
     estimate = sum(estimate, na.rm = TRUE),
     summary_est = first(summary_est),  # Assuming summary_est is the same for each group
@@ -478,7 +480,7 @@ data_acs_incomplete_plumbing = get_acs(
   summary_var = "B25048_001", #creates a column w/'total' variable
   year = 2020
 )
-data_acs_incomplete_plumbing <- data_acs_incomplete_plumbing %>%
+data_acs_incomplete_plumbing <- data_acs_incomplete_plumbing |>
   mutate(var_freq_incomplete_plumbing = ifelse(summary_est != 0, estimate / summary_est, NA))
 rm(vars_acs_incomplete_plumbing)
 
@@ -503,14 +505,14 @@ data_acs_overcrowding = get_acs(
 )
 
 # Summarize the data
-data_acs_overcrowding <- data_acs_overcrowding %>%
+data_acs_overcrowding <- data_acs_overcrowding |>
   mutate(category = case_when(
     variable %in% c("occupance_1.01to1.50_owner", "occupance_1.51to2.00_owner", "occupance_2.01andup_owner", "occupance_1.01to1.50_renter", "occupance_1.51to2.00_renter","occupance_2.01andup_renter") ~ "overcrowding",
     TRUE ~ NA_character_  # Handle cases that do not fall into these categories
   ))
 
-data_acs_overcrowding <- data_acs_overcrowding %>%
-  group_by(GEOID, category) %>%
+data_acs_overcrowding <- data_acs_overcrowding |>
+  group_by(GEOID, category) |>
   summarise(
     estimate = sum(estimate, na.rm = TRUE),
     summary_est = first(summary_est),  # Assuming summary_est is the same for each group
@@ -528,7 +530,7 @@ Extract the variable frequencies, and merge datasets to create one dataset with 
 datasets <- list(data_acs_less_highschool, data_acs_associates_college, data_acs_incomplete_plumbing, data_acs_no_telephone, data_acs_novehicle, data_acs_overcrowding, data_acs_poverty_level, data_acs_poverty_level_150, data_acs_unemployment, data_acs_whitecollar, data_dhc_homeownership, data_dhc_singleparent, data_acs_median_income, data_acs_median_rent, data_acs_gini, data_acs_home_value, data_acs_housing_costs)
 
 selected_datasets <- lapply(datasets, function(df) {
-  df %>%
+  df |>
     select(GEOID, starts_with("var_"))
 })
 
@@ -700,7 +702,7 @@ variables_to_log <- c(
 )
 
 # Apply log transformation and rename variables
-merged_data <- merged_data %>%
+merged_data <- merged_data |>
   mutate(across(
     all_of(variables_to_log), 
     ~ log(. + 1e-5), 
@@ -708,7 +710,7 @@ merged_data <- merged_data %>%
   ))
 ```
 
-*Preparing the data: health outcomes*
+### Preparing the data: health outcomes
 
 Import CDC PLACES data, which contains health outcomes data.
 
@@ -719,7 +721,7 @@ Import CDC PLACES data, which contains health outcomes data.
 data_places = read_csv("PLACES__Local_Data_for_Better_Health__Census_Tract_Data_2024_release_20241027.csv")
 
 # rename variable "LocationName" to "GEOID" to be consistent with census data
-data_places <- data_places %>% 
+data_places <- data_places |> 
     rename("GEOID" = "LocationName")
 
 # Filter to include only Pennsylvania
@@ -751,7 +753,7 @@ merged_outcomes = data_places_obesity |>
   left_join(data_places_healthrating, by = "GEOID")
 ```
 
-*Preparing the data: merging the predictor and outcomes datasets*
+### Preparing the data: merging the predictor and outcomes datasets
 
 First we check how many tracts are included in our dataset with both demographic and health outcomes data.
 
@@ -761,7 +763,7 @@ length(setdiff(merged_data$GEOID, merged_outcomes$GEOID)) #There are 38 rows in 
 
 # We check the data for the missing tracts. We sample a few of them.
 setdiff(merged_data$GEOID, merged_outcomes$GEOID)
-merged_data %>% filter(GEOID == 42101036901) #an example of one we checked
+merged_data |> filter(GEOID == 42101036901) #an example of one we checked
 # They seem to be empty aside from the GEOID in the demographic dataset. It seems that for whatever reason, this tract does not have any demographic data and it is okay to remove them from the analyses, and use only those with demographic and outcomes data.
 
 # Number of tracts with demographic data
@@ -783,7 +785,7 @@ summary_table <- data.frame(
 kable(summary_table, caption = "Summary of Tracts with Data", align = c("l", "r"), digits = 0)
 ```
 
-Next we check our data missingness.
+Next we check our data missingness. Overall we have fairly low missingness in the sociodemographic characteristics, and no missingness in the health outcomes variables.
 
 ```{r}
 # List of demographic variables
@@ -823,7 +825,7 @@ missingness_table_demographics <- data.frame(
 rownames(missingness_table_demographics) <- NULL
 
 # Print the table using kable to make it more presentable
-missingness_table_demographics %>%
+missingness_table_demographics |>
   kable(col.names = c("Variable", "Missing Data"),
         caption = "Missing Data for Demographic Variables (%)",
         align = c("l", "r"),
@@ -854,7 +856,7 @@ missingness_table_outcomes <- data.frame(
 rownames(missingness_table_outcomes) <- NULL
 
 # Print the table using kable to make it more presentable
-missingness_table_outcomes %>%
+missingness_table_outcomes |>
   kable(col.names = c("Variable", "Missing Data"),
         caption = "Missing Data for Health Outcomes Variables (%)",
         align = c("l", "r"),
@@ -863,25 +865,27 @@ missingness_table_outcomes %>%
 
 ## Results {#sec-results}
 
+### Examination of the data: sociodemographic variables and health outcomes
+
 First we observe basic summary statistics for the demographic variables of interest, as well as the five health outcomes we will be examining: obesity, stroke, coronary heart disease, disability, and self-rated health.
 
 ```{r}
 # Create a summary table for the demographic variables
-summary_table_demographics <- merged_data_subset %>%
+summary_table_demographics <- merged_data_subset |>
   summarise(across(everything(), 
                    list(mean = ~mean(. , na.rm = TRUE), 
                         sd = ~sd(. , na.rm = TRUE), 
                         missing = ~sum(is.na(.))),
-                   .names = "{.col}_{.fn}")) %>%
+                   .names = "{.col}_{.fn}")) |>
   pivot_longer(cols = everything(), 
                names_to = c("Characteristic", "Statistic"),
-               names_pattern = "(.*)_(.*)") %>%
-  pivot_wider(names_from = Statistic, values_from = value) %>%
+               names_pattern = "(.*)_(.*)") |>
+  pivot_wider(names_from = Statistic, values_from = value) |>
   mutate(
     # Round mean and sd to 2 decimal places
     `Average (Standard Deviation), N=3446` = paste0(round(mean, 2), " (", round(sd, 2), ")"),
     Missingness = missing
-  ) %>%
+  ) |>
   select(Characteristic, `Average (Standard Deviation), N=3446`, Missingness)
 
 # View the summary table
@@ -889,21 +893,21 @@ summary_table_demographics
 
 
 # Create a summary table for the outcomes variables
-summary_table_outcomes <- merged_outcomes_subset %>%
+summary_table_outcomes <- merged_outcomes_subset |>
   summarise(across(everything(), 
                    list(mean = ~mean(. , na.rm = TRUE), 
                         sd = ~sd(. , na.rm = TRUE), 
                         missing = ~sum(is.na(.))),
-                   .names = "{.col}_{.fn}")) %>%
+                   .names = "{.col}_{.fn}")) |>
   pivot_longer(cols = everything(), 
                names_to = c("Characteristic", "Statistic"),
-               names_pattern = "(.*)_(.*)") %>%
-  pivot_wider(names_from = Statistic, values_from = value) %>%
+               names_pattern = "(.*)_(.*)") |>
+  pivot_wider(names_from = Statistic, values_from = value) |>
   mutate(
     # Round mean and sd to 2 decimal places
     `Average (Standard Deviation), N=3446` = paste0(round(mean, 2), " (", round(sd, 2), ")"),
     Missingness = missing
-  ) %>%
+  ) |>
   select(Characteristic, `Average (Standard Deviation), N=3446`, Missingness)
 
 # View the summary table
@@ -911,7 +915,7 @@ summary_table_outcomes
 
 ```
 
-Next we examine the distributions of the health outcomes data, using both bar graphs and chloropleth maps to see the distrbutions across the state of Pennsylvania.
+Next we examine the distributions of the health outcomes data, using both bar graphs and chloropleth maps to see the distributions across the state of Pennsylvania in 2020.
 
 ```{r}
 # Disability
@@ -964,18 +968,13 @@ Chloropleth maps:
 ```{r}
 # We start by creating a base map of Pennsylvania.
 pa.tracts = tracts(cb = TRUE, resolution = "500k",year="2020")
-
 pa.tracts = pa.tracts |>  filter(STATEFP == 42)
-
-ggplot(data = st_simplify(pa.tracts, dTolerance = 1e3)) +
-  geom_sf() +
-  ggtitle("Pennsylvania Tracts")
 ```
 
-Next we create chloropleth maps for each of the health outcomes variables. These maps help us visualize the distribution of the health outcomes data across Pennsylvania tracts.
+Next we create chloropleth maps for each of the health outcomes variables. These maps help us visualize the distribution of the health outcomes data across Pennsylvania tracts. The white areas indicate missing data.
 
 ```{r}
-merged_data_outcomes <- pa.tracts %>%
+merged_data_outcomes <- pa.tracts |>
   inner_join(merged_outcomes, by = c("GEOID" = "GEOID"))
 
 # Obesity
@@ -1025,6 +1024,8 @@ ggplot(data = merged_data_outcomes) +
 
 ```
 
+### Creation of the ADI for 2020 Pennsylvania
+
 We perform factor analysis to reconstruct the ADI for 2020 Pennsylvania.
 
 ```{r}
@@ -1039,10 +1040,52 @@ fa_result <- fa(merged_data_subset_clean[,2:18], nfactors = 1, rotate = "varimax
 fa_result$loadings
 
 # Calculate factor scores for each geographic tract based on the factor analysis
-factor_scores <- factor.scores(merged_data_subset_clean[,2:18], fa_result) #Each row corresponds to a geographic tract, and each column corresponds to a factor score, based on the factors extracted in the factor analysis.
+factor_scores <- factor.scores(merged_data_subset_clean[,2:18], fa_result) #Each row corresponds to a geographic tract, and each column corresponds to a factor score coefficient, based on the factors extracted in the factor analysis.
 ```
 
-We can compare our factor scores to those in Singh's paper (see @sec-methods). In general the characteristics do seem to have similar factor scores in similar directions, but of lower magnitude than in Singh's paper.
+We present the data in a table similar to the one for Singh's data above, in order to facilitate comparison.
+
+```{r}
+# Create the data frame with the characteristics and corresponding factor score coefficients
+data_ours <- data.frame(
+  Characteristic = c(
+    "Percent of the block group’s population aged ≥ 25 years with < 9 years of education",
+    "Percent aged ≥ 25 years with an Associate's diploma or higher degree",
+    "Percent of employed persons ≥16 years of age in white-collar occupations",
+    "Median family income",
+    "Income disparity measured by Gini index",
+    "Median home value",
+    "Median gross rent",
+    "Median monthly owner costs",
+    "Percent owner-occupied housing units (home ownership rate)",
+    "Percent of civilian labor force population ≥ 16 years of age unemployed (unemployment rate), log",
+    "Percent of families below the poverty level, log",
+    "Percent of population below 150% of the poverty threshold, log",
+    "Percent of single-parent households with children < 18 years of age, log",
+    "Percent of occupied housing units without a motor vehicle, log",
+    "Percent of occupied housing units without a telephone, log",
+    "Percent of occupied housing units without complete plumbing, log",
+    "Percent of occupied housing units with more than one person per room (crowding), log"
+  ),
+  Factor_Score_Coefficient = c(
+    -0.624, 0.776, 0.792, 0.885, -0.176, 0.769, 0.627, 0.405, 0.488,
+-0.338, -0.805, -0.888, -0.670, -0.420, -0.265, -0.166, -0.294
+  )
+)
+
+# View the table
+data_ours |>
+  kable(format = "html", col.names = c("Census Block Characteristics", "Factor Score Coefficients")) |>
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position = "center"
+  ) |>
+  column_spec(1, width = "20em") |>
+  column_spec(2, width = "10em")
+```
+
+We can compare our factor scores to those in Singh's paper (see @sec-methods).
 
 We use the factor loadings to compute the ADI for each tract.
 
@@ -1053,7 +1096,7 @@ adi_scores <- factor_scores$scores[, 1]  # Take the first factor score as the AD
 merged_data_subset_clean$ADI <- adi_scores
 ```
 
-Plot a map of the ADI in Pennsylvania tracts.
+Plot a map of the ADI in Pennsylvania tracts. We see the distribution of ADI across Pennsylvania; it appears there are regions of higher ADI around the Philadelphia and Pittsburgh areas.
 
 ```{r}
 merged_data_subset_clean_map <- pa.tracts |>
@@ -1068,7 +1111,9 @@ ggplot(data = merged_data_subset_clean_map) +
   theme(legend.position = "bottom")
 ```
 
-We test whether the ADI is associated with health outcomes.
+### Test of association between ADI and health outcomes
+
+We test whether the ADI is associated with the five health outcomes of interest.
 
 ```{r}
 # Combine predictor and outcomes data.
@@ -1127,11 +1172,23 @@ cor_results
 
 ```
 
+We also use linear regression to test whether ADI is significantly associated with the five health outcomes of interest.
+
+```{r}
+summary(lm(Rate_Disability ~ ADI, data = merged_data_all))
+summary(lm(Rate_Healthrating ~ ADI, data = merged_data_all))
+summary(lm(Rate_Heart ~ ADI, data = merged_data_all))
+summary(lm(Rate_Obesity ~ ADI, data = merged_data_all))
+summary(lm(Rate_Stroke ~ ADI, data = merged_data_all))
+```
+
+In simple linear regression models, ADI is significantly associated with rates of disability ($\beta$ = -5.8, p\<2e-16), coronary heart disease ($\beta$ = -0.7, p\<2e-16), obesity ($\beta$ = -4.2, p\<2e-16), stroke ($\beta$ = -0.8, p\<2e-16), and self-reported health ($\beta$ = -5.6, p\<2e-16).
+
 ## Conclusion
 
-In this project, we analyzed the 17 characteristics that Singh used to create the ADI. Whereas he used data from across the United States of America between the years 1969 and 1998, we used data from Pennsylvania 2016-2020. In this way we analyzed whether the 17 characteristics he used are still useful in our population. The factor scores are similar but of lower magnitude, and the ADI we devised is correlated with health outcomes including rates of disability, coronary heart disease, obesity, stroke, and self-reported health.
+In this project, we analyzed the 17 characteristics that Singh used to create the ADI. Whereas he used data from across the United States of America between the years 1969 and 1998, we used data from Pennsylvania 2016-2020. In this way we analyzed whether the 17 characteristics he used are still useful in our population. We successfully replicated Singh's methods to create an ADI using factor score analysis for Pennsylvania 2020. We then demonstrated that the ADI we devised is significantly correlated with health outcomes including rates of disability, coronary heart disease, obesity, stroke, and self-reported health. Therefore, our ADI appears to be a useful measure for health disparities research in Pennsylvania in the 2020s.
 
-It seems that the ADI devised by Singh remains useful in our population; however, it is important to use updated data for our patient population, as our factor scores using 2020 Pennsylvania data differ from Singh's factor scores. Furthermore, the weaker factor score magnitudes indicate that these might not be the best characteristics, of all those available, to include in an ADI. There are many additional characteristics that can be considered for inclusion, either as an addition or replacement; some are included in the Supplements section.
+Data missingness, though low, is a limitation of our analyses. In addition, for some of the sociodemographic variables, it is impossible to use the exact variable that Singh used in our modern analyses; for example, income disparity cannot be measured in the exact same way several decades later.
 
 There are many potential future directions for this research.
 
@@ -1139,11 +1196,11 @@ There are many potential future directions for this research.
 
 -   To test the association between our ADI and mortality, and other important health outcomes measures
 
--   To investigate other sociodemographic characteristics that may be useful in an ADI, and consider whether these should be in addition to or instead of some of the characteristics currently in the ADI
+-   To investigate other sociodemographic characteristics that may be useful in an ADI, and consider whether these should be in addition to or instead of characteristics currently in the ADI; some additional characteristics to consider are included in the Supplements section.
 
--   To re-examine Singh's ADI using 2020 data for the entire country, and state-by-state, and test whether the measuresments do differ significantly by state; in this way, we can decide whether there should be different ADIs for each state or whether it is sufficient to have one country-wide
+-   To re-examine the ADI using 2020 data for the entire country, and state-by-state, and test whether the measurements do differ significantly by state; in this way, we can decide whether there should be different ADIs for each state or whether it is sufficient to have one country-wide
 
-Overall, our ADI is a useful measure for health disparities research in Pennsylvania in the 2020s.
+Overall, our ADI is a useful measure for health disparities research in Pennsylvania in the 2020s, and significantly associated with important health outcomes measures.
 
 ## References
 
@@ -1183,7 +1240,7 @@ data_dhc_race = get_decennial(
   sumfile = "dhc"
 )
 #create a column with frequency
-data_dhc_race <- data_dhc_race %>%
+data_dhc_race <- data_dhc_race |>
   mutate(var_freq_race = ifelse(summary_value != 0, value / summary_value, NA))
 #remove variable list
 rm(vars_dhc_race)
@@ -1203,7 +1260,7 @@ data_dhc_ethnicity = get_decennial(
   year = 2020,
   sumfile = "dhc"
 )
-data_dhc_ethnicity <- data_dhc_ethnicity %>%
+data_dhc_ethnicity <- data_dhc_ethnicity |>
   mutate(var_freq_ethnicity = ifelse(summary_value != 0, value / summary_value, NA))
 rm(vars_dhc_ethnicity)
 
@@ -1223,7 +1280,7 @@ data_dhc_urban_p = get_decennial(
   year = 2020,
   sumfile = "dhc"
 )
-data_dhc_urban_p <- data_dhc_urban_p %>%
+data_dhc_urban_p <- data_dhc_urban_p |>
   mutate(var_freq_urban = ifelse(summary_value != 0, value / summary_value, NA))
 rm(vars_dhc_urban_p)
 
@@ -1242,7 +1299,7 @@ data_dhc_housing_occ = get_decennial(
   year = 2020,
   sumfile = "dhc"
 )
-data_dhc_housing_occ <- data_dhc_housing_occ %>%
+data_dhc_housing_occ <- data_dhc_housing_occ |>
   mutate(var_freq_housing_occ = ifelse(summary_value != 0, value / summary_value, NA))
 rm(vars_dhc_housing_occ)
 
@@ -1265,7 +1322,7 @@ data_dhc_household_type = get_decennial(
   year = 2020,
   sumfile = "dhc"
 )
-data_dhc_household_type <- data_dhc_household_type %>%
+data_dhc_household_type <- data_dhc_household_type |>
   mutate(var_freq_household_type = ifelse(summary_value != 0, value / summary_value, NA))
 rm(vars_dhc_household_type)
 
@@ -1289,7 +1346,7 @@ data_dhc_household_size = get_decennial(
   year = 2020,
   sumfile = "dhc"
 )
-data_dhc_household_size <- data_dhc_household_size %>%
+data_dhc_household_size <- data_dhc_household_size |>
   mutate(var_freq_household_size = ifelse(summary_value != 0, value / summary_value, NA))
 rm(vars_dhc_household_size)
 
@@ -1339,15 +1396,15 @@ data_acs_income = get_acs(
 )
 
 # Summarize the data
-data_acs_income <- data_acs_income %>%
+data_acs_income <- data_acs_income |>
   mutate(category = case_when(
     variable %in% "income_under10k" ~ "income_under10k",
     variable %in% c("income_50_add10", "income_60_add15", "income_75_add25", "income_100_add25" , "income_125_add25", "income_150_add50", "income_above200") ~ "income50kandup",
     TRUE ~ NA_character_  # Handle cases that do not fall into these categories
   ))
 
-data_acs_income_combined <- data_acs_income %>%
-  group_by(GEOID, category) %>%
+data_acs_income_combined <- data_acs_income |>
+  group_by(GEOID, category) |>
   summarise(
     estimate = sum(estimate, na.rm = TRUE),
     summary_est = first(summary_est),  # Assuming summary_est is the same for each group
